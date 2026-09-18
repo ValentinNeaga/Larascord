@@ -1,17 +1,17 @@
 import { Steps, Callout } from 'nextra-theme-docs'
 
-Larascord dispatches its own events. There is nothing to publish and nothing to register, they are dispatched from the package and you listen to them like any other Laravel event.
+Larascord dispatches its own events from the package. There is nothing to publish or register.
 
 | Event | Dispatched when | Properties |
 | --- | --- | --- |
-| `DiscordAccountCreated` | A Discord account is stored for the first time. | `$account` |
-| `DiscordAccountUpdated` | A known Discord account comes back and its profile is refreshed. | `$account` |
-| `DiscordAccountLinked` | A Discord account is attached to one of your users. | `$account`, `$user` |
-| `DiscordAccountUnlinked` | A Discord account is removed. | `$account` |
-| `UserAuthenticated` | A user is logged in through Discord. | `$account`, `$user` |
+| `DiscordAccountCreated` | A Discord account is inserted into `larascord_accounts`. | `$account` |
+| `DiscordAccountUpdated` | An existing Discord account is updated. | `$account` |
+| `DiscordAccountLinked` | A Discord account is assigned a `user_id`. | `$account`, `$user` |
+| `DiscordAccountUnlinked` | A Discord account is deleted. | `$account` |
+| `UserAuthenticated` | The callback completes a login. | `$account`, `$user` |
 
 <Callout type="info">
-    Every event lives in the `Jakyeru\Larascord\Events` namespace and `$account` is always a `Jakyeru\Larascord\Models\DiscordAccount`.
+    The events are in the `Jakyeru\Larascord\Events` namespace. `$account` is a `Jakyeru\Larascord\Models\DiscordAccount` and `$user` is an `Illuminate\Contracts\Auth\Authenticatable`.
 </Callout>
 
 ## Listening
@@ -22,7 +22,7 @@ Larascord dispatches its own events. There is nothing to publish and nothing to 
     ```
 
     ### Type hint the event
-    Laravel discovers the listener from the type hint, so there is nothing else to register.
+    Laravel discovers the listener from the type hint of the `handle` method.
 
     ```php filename="app/Listeners/WelcomeNewUser.php" showLineNumbers
     <?php
@@ -42,7 +42,7 @@ Larascord dispatches its own events. There is nothing to publish and nothing to 
     ```
 </Steps>
 
-## Example: adding the user to a guild after they log in
+## Example: adding the user to a guild
 
 ```php filename="app/Listeners/AddUserToGuild.php" showLineNumbers
 <?php
@@ -60,7 +60,7 @@ class AddUserToGuild
 }
 ```
 
-## Example: refusing a banned user
+## Example: rejecting a banned user
 
 ```php filename="app/Listeners/BlockBannedUsers.php" showLineNumbers
 <?php

@@ -10,14 +10,14 @@ It allows users to log in to your platform using their Discord account without t
 
 It also seamlessly integrates with Discord, providing a secure and user-friendly way to authenticate users in your application.
 
-## Does it work with my existing project?
+## Existing applications
 
-Yes. Larascord keeps to itself:
+Larascord can be installed in an application that already has a `users` table, authentication and views.
 
-* It stores the Discord profile in its own tables and links it to your users through a foreign key, so your `users` table stays yours.
-* It does not publish views and does not install a starter kit, so your UI is untouched.
-* Every route it registers lives under its own prefix and is named `larascord.*`, so nothing of yours is overwritten.
-* Removing the package and dropping its two tables leaves your application working.
+* The Discord profile is stored in the `larascord_accounts` table and linked to your user model through a `user_id` foreign key. The `users` table is not modified.
+* No views, assets or starter kits are published.
+* All routes are registered under the configured prefix and named with a `larascord.` prefix.
+* The package adds one configuration file, `config/larascord.php`, and two tables, `larascord_accounts` and `larascord_access_tokens`.
 
 ## Documentation
 

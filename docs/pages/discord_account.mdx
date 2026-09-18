@@ -2,11 +2,9 @@ import { Callout } from 'nextra-theme-docs'
 
 ## What is the DiscordAccount model?
 
-`Jakyeru\Larascord\Models\DiscordAccount` is the record Larascord keeps for every Discord profile that has logged in to your application. It lives in the `larascord_accounts` table and holds a `user_id` pointing at one of your users.
+`Jakyeru\Larascord\Models\DiscordAccount` represents a row in the `larascord_accounts` table. It holds the Discord profile and a `user_id` foreign key pointing at your user model.
 
-This is where the Discord profile lives, which is why your `users` table does not have to know that Discord exists.
-
-## Getting an account
+## Retrieving an account
 
 ```php
 use Jakyeru\Larascord\Models\DiscordAccount;
@@ -19,18 +17,18 @@ $account = auth()->user()->discordAccount;
 ```
 
 <Callout type="info">
-    The last one needs the `InteractsWithDiscord` trait on your `User` model. The first two work without it.
+    The `discordAccount` relationship requires the `InteractsWithDiscord` trait on your user model. `forUser` and `forDiscordId` do not.
 </Callout>
 
 ## Attributes
 
 | Attribute | Type | Description |
 |:---|:---|:---|
-| `user_id` | mixed | The primary key of the user the account is linked to. |
+| `user_id` | mixed | The primary key of the linked user. |
 | `discord_id` | string | The user's Discord ID. |
 | `username` | string | The user's unique Discord username. |
 | `global_name` | string | The user's global display name. |
-| `display_name` | string | The global display name, falling back to the username. |
+| `display_name` | string | `global_name`, falling back to `username`. |
 | `tag` | string | The user's tag, for example `jakye` or `jakye#0001`. |
 | `discriminator` | string | The user's discriminator. |
 | `email` | string | The e-mail address of the Discord account. |
@@ -44,6 +42,10 @@ $account = auth()->user()->discordAccount;
 | `premium_type` | int | The user's Nitro subscription type. |
 | `public_flags` | int | The user's public flags. |
 
+<Callout type="info">
+    `display_name` and `tag` are accessors. The remaining attributes are columns of the `larascord_accounts` table.
+</Callout>
+
 ## Relationships
 
 ```php
@@ -54,7 +56,7 @@ $account->accessToken;
 
 ## Methods
 
-The account exposes the same Discord API methods as the `InteractsWithDiscord` trait, which are documented [here](/interacts_with_discord).
+The account exposes the Discord API methods documented in [InteractsWithDiscord Trait](/interacts_with_discord).
 
 ```php
 $account->getAvatar(['size' => 64]);
@@ -68,7 +70,7 @@ $account->getConnections();
 
 ### revoke
 <Callout type="warning">
-    This method revokes the OAuth2 access token with Discord and deletes the account. The user itself is left alone.
+    This method revokes the OAuth2 access token with Discord and deletes the row from `larascord_accounts`. The linked user is not deleted.
 </Callout>
 ```php copy=false
 /**

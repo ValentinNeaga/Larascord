@@ -1,10 +1,10 @@
 import { Callout } from 'nextra-theme-docs'
 
 ## What is InteractsWithDiscord Trait?
-The `InteractsWithDiscord.php` trait adds convenience methods to your `User` model that reach through to the linked [DiscordAccount](/discord_account).
+The `InteractsWithDiscord.php` trait adds the `discordAccount` relationship and a set of methods that delegate to the linked [DiscordAccount](/discord_account).
 
 <Callout type="info">
-    The trait is optional. Larascord works without it, and everything below is also available on the account itself through `DiscordAccount::forUser($user)`.
+    The trait is optional. The same methods are available on the account itself, which can be retrieved with `DiscordAccount::forUser($user)`.
 </Callout>
 
 ```php filename="app/Models/User.php" showLineNumbers {4, 8}
@@ -29,9 +29,6 @@ class User extends Authenticatable
 ```
 
 ## hasDiscordAccount
-<Callout type="info">
-    Use this to decide whether to show a "Link Discord" or an "Unlink Discord" button.
-</Callout>
 ```php copy=false
 /**
 * Determine whether the user has linked a Discord account.
@@ -42,7 +39,7 @@ class User extends Authenticatable
 
 ## getDiscordTag
 <Callout type="info">
-    This method will return the user's tag in the format of `username#discriminator`. If the user migrated to the new username system, it will return the user's username, followed by their display name in brackets, for example `jakye (Jakye)`.
+    This method returns the user's tag in the format `username#discriminator`. For accounts migrated to the new username system, it returns the username, followed by the display name in brackets, for example `jakye (Jakye)`.
 </Callout>
 ```php copy=false
 /**
@@ -66,7 +63,7 @@ class User extends Authenticatable
 
 ## unlinkDiscordAccount
 <Callout type="warning">
-    This method revokes the OAuth2 access token with Discord and deletes the Discord account. The user itself is left alone.
+    This method revokes the OAuth2 access token with Discord and deletes the row from `larascord_accounts`. The user is not deleted.
 </Callout>
 ```php copy=false
 /**

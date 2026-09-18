@@ -1,6 +1,6 @@
 import { Callout } from 'nextra-theme-docs'
 
-The `Larascord` facade is the entry point to everything the package does outside of its own routes.
+The `Larascord` facade resolves `Jakyeru\Larascord\Larascord` from the container.
 
 ```php
 use Jakyeru\Larascord\Facades\Larascord;
@@ -8,7 +8,7 @@ use Jakyeru\Larascord\Facades\Larascord;
 
 ## authorizationUrl
 
-Builds the Discord authorization URL from your configuration. Use it when you want to start the flow yourself instead of linking to the `larascord.redirect` route.
+Returns the Discord authorization URL built from `config/larascord.php`. Use it to start the flow outside of the `larascord.redirect` route.
 
 ```php copy=false
 /**
@@ -27,12 +27,12 @@ return redirect()->away(Larascord::authorizationUrl($state));
 ```
 
 <Callout type="warning">
-    If `verify_state` is enabled, the state you put in the session has to be the one you pass to the URL, otherwise the callback will reject the login.
+    When `verify_state` is enabled, the state passed to the URL must be the state stored in the session under `Larascord::STATE_KEY`. The callback rejects the request otherwise.
 </Callout>
 
 ## resolveUsersUsing
 
-Replaces the way Larascord decides which of your users a Discord account belongs to. Register it in the `boot` method of a service provider.
+Registers a callback that resolves the user a Discord account belongs to. Call it in the `boot` method of a service provider.
 
 ```php copy=false
 /**
@@ -56,10 +56,10 @@ public function boot(): void
 ```
 
 <Callout type="info">
-    Return `null` to refuse the login. The user will be redirected with the `registration_disabled` error message.
+    Returning `null` rejects the login. The user is redirected with the `registration_disabled` error message.
 </Callout>
 
-If you would rather swap the whole resolver, bind your own implementation of `Jakyeru\Larascord\Contracts\ResolvesUsers` in the container.
+The resolver can also be replaced in the container by binding `Jakyeru\Larascord\Contracts\ResolvesUsers`.
 
 ```php
 $this->app->bind(ResolvesUsers::class, MyUserResolver::class);
@@ -67,7 +67,7 @@ $this->app->bind(ResolvesUsers::class, MyUserResolver::class);
 
 ## syncAccount
 
-Creates or updates the Discord account belonging to a Discord profile and links it to a user.
+Creates or updates the Discord account matching the given profile and assigns the `user_id`.
 
 ```php copy=false
 /**
@@ -79,14 +79,18 @@ Creates or updates the Discord account belonging to a Discord profile and links 
 
 ## scopes and hasScope
 
-```php
-Larascord::scopes(); // "identify email"
+`scopes` returns the configured scopes as a space delimited string. `hasScope` returns whether a scope is configured.
 
-Larascord::hasScope('guilds'); // false
-```
+| Call | Returns |
+| --- | --- |
+| `Larascord::scopes()` | `identify email` |
+| `Larascord::hasScope('identify')` | `true` |
+| `Larascord::hasScope('guilds')` | `false` |
 
 ## version
 
+Returns the Larascord version, for example `8.0.0`.
+
 ```php
-Larascord::version(); // "8.0.0"
+Larascord::version();
 ```

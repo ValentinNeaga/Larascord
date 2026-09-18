@@ -42,7 +42,7 @@ php artisan vendor:publish --provider="Jakyeru\Larascord\LarascordServiceProvide
 | `LARASCORD_PROMPT` | `none` | Either `none` or `consent`. |
 
 <Callout type="warning">
-    `LARASCORD_SCOPE` was renamed to `LARASCORD_SCOPES` in version 8 and takes a comma separated list instead of an `&` separated one.
+    `LARASCORD_SCOPE` was renamed to `LARASCORD_SCOPES` in version 8. It takes a comma separated list instead of an `&` separated one.
 </Callout>
 
 ## Configuration
@@ -140,10 +140,10 @@ return [
     | State Verification
     |--------------------------------------------------------------------------
     |
-    | Larascord sends a random "state" parameter to Discord and verifies it when
-    | the user comes back. This protects the callback route against cross-site
-    | request forgery. Only turn this off if you build the authorization URL
-    | yourself and cannot keep the state in the session.
+    | A random "state" parameter is sent to Discord and verified on the
+    | callback, which protects the route against cross-site request
+    | forgery. Disable this only when the authorization URL is built
+    | outside of Larascord and the state cannot be kept in session.
     |
     */
 
@@ -154,14 +154,13 @@ return [
     | Routes
     |--------------------------------------------------------------------------
     |
-    | Larascord registers its own routes under the prefix below. Every route is
-    | named with a "larascord." prefix so it can never collide with the routes
-    | of your application. Set "enabled" to false if you would rather point
-    | your own routes to Jakyeru\Larascord\Http\Controllers\DiscordController.
+    | Routes are registered under the prefix below and named with a
+    | "larascord." prefix. Set "enabled" to false to register your own
+    | routes against Jakyeru\Larascord\Http\Controllers\DiscordController.
     |
     | The "login_alias" option registers a "/login" route named "login" that
-    | sends the visitor straight to Discord. Leave it disabled if your
-    | application already has a route with that name.
+    | redirects to Discord. Keep it disabled if the application already
+    | registers a route with that name.
     |
     */
 
@@ -189,8 +188,8 @@ return [
     | Users
     |--------------------------------------------------------------------------
     |
-    | Larascord never touches your users table. It keeps the Discord profile in
-    | its own table and links it to one of your users through a foreign key.
+    | The Discord profile is stored in the table configured below and linked
+    | to this model through a "user_id" foreign key.
     |
     | The "attributes" array maps the columns of your users table to the
     | attributes of the Discord profile. Available attributes are: id,
@@ -198,17 +197,16 @@ return [
     | email, verified, banner, banner_color, accent_color,
     | locale, mfa_enabled, premium_type, public_flags.
     |
-    | "link_by_email" links a Discord account to an existing user when their
-    | e-mail addresses match, which is what you want when you are adding
-    | Discord login to an application that already has registered users.
+    | "link_by_email" matches the e-mail address of the Discord account
+    | against the column set in "email_column" and links the account to
+    | the user it belongs to.
     |
-    | "create_missing" decides whether Larascord may create a user when there
-    | is nothing to link the Discord account to. Turn it off to keep your
-    | application invite-only.
+    | "create_missing" determines whether a user is created when no existing
+    | user is matched. When disabled, the login is rejected instead.
     |
-    | "fill_random_password" gives the created user a random hashed password so
-    | that a non-nullable password column does not reject the insert. The
-    | password is never shown to anyone and cannot be guessed.
+    | "fill_random_password" fills a "password" column that is not present in
+    | the "attributes" array with a hashed random string. It applies only
+    | when the column exists on the users table.
     |
     */
 
@@ -229,10 +227,9 @@ return [
     | Database
     |--------------------------------------------------------------------------
     |
-    | These are the tables Larascord owns. Dropping them is all it takes to
-    | remove every trace of Larascord from your database.
+    | These are the tables created by Larascord's migrations.
     |
-    | Set "foreign_keys" to false if your users table lives on another
+    | Set "foreign_keys" to false when the users table is on another
     | connection or does not support foreign key constraints.
     |
     */
@@ -305,8 +302,9 @@ return [
     | Redirects
     |--------------------------------------------------------------------------
     |
-    | Where to send the user after they log in, after they log out and after
-    | they unlink their Discord account.
+    | Where the user is redirected after logging in, after logging out and
+    | after unlinking their Discord account. These are used as fallbacks
+    | when no return URL was resolved when the flow started.
     |
     */
 

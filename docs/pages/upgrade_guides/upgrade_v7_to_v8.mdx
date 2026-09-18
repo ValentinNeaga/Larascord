@@ -1,19 +1,19 @@
 import { Steps, Callout } from 'nextra-theme-docs'
 
 <Callout type="warning">
-    Version 8 is a rewrite of how Larascord stores users. It is not backwards compatible with version 7 and the steps below have to be followed in order. Take a backup of your database before you start.
+    Version 8 changes how Larascord stores users. It is not backwards compatible with version 7 and the steps below have to be followed in order. Back up your database before you start.
 </Callout>
 
-## What changed and why
+## Summary of changes
 
-Up to version 7 Larascord owned your application. It installed Laravel Breeze, overwrote `resources/views`, replaced `routes/web.php`, shipped its own `App\Models\User` and kept the Discord profile in your `users` table with the Discord snowflake as the primary key. That is fine for a brand new project and impossible for everything else.
+Version 7 required Laravel Breeze, published `resources/views`, replaced `routes/web.php`, shipped an `App\Models\User` model and stored the Discord profile in the `users` table with the Discord ID as the primary key.
 
-Version 8 keeps to itself:
+In version 8:
 
-* Larascord stores the Discord profile in its own `larascord_accounts` table and links it to one of your users through a `user_id` foreign key. Your `users` table is yours again.
-* No views, no assets and no Laravel Breeze. Your UI is untouched.
-* No `routes/web.php` and no `login`, `logout` or `profile.destroy` routes. Every route Larascord registers lives under its prefix and is named `larascord.*`.
-* Removing the package and dropping the two Larascord tables leaves your application working.
+* The Discord profile is stored in the `larascord_accounts` table and linked to your user model through a `user_id` foreign key. The `users` table is not modified.
+* Laravel Breeze is no longer a dependency. No views or assets are published.
+* `routes/web.php` is no longer replaced. The `login`, `logout` and `profile.destroy` routes are no longer registered. All routes are registered under the configured prefix and named with a `larascord.` prefix.
+* The package adds one configuration file and two tables.
 
 <Steps>
     ### Follow [Laravel's upgrade guide](https://laravel.com/docs/13.x/upgrade) to upgrade to Laravel 13
@@ -27,7 +27,7 @@ Version 8 keeps to itself:
     ```
 
     <Callout type="info">
-        Laravel Breeze is no longer a dependency of Larascord. If you want to keep the views and routes it gave you, add `laravel/breeze` to your own `composer.json`. They will keep working, because Larascord no longer touches them.
+        Laravel Breeze is no longer a dependency of Larascord. Add `laravel/breeze` to your own `composer.json` to keep the views and routes it provides. They are no longer modified by Larascord.
     </Callout>
 
     ### Publish the new configuration file
@@ -36,7 +36,7 @@ Version 8 keeps to itself:
     ```
 
     <Callout type="warning">
-        This overwrites `config/larascord.php`. Write down your `guilds`, `guild_roles` and any message you customised before you run it, then copy them into the new file.
+        This overwrites `config/larascord.php`. Copy your `guilds`, `guild_roles` and any customised messages into the new file afterwards.
     </Callout>
 
     ### Publish and run the new migrations
@@ -46,10 +46,10 @@ Version 8 keeps to itself:
     ```bash
     php artisan migrate
     ```
-    This creates the `larascord_accounts` and `larascord_access_tokens` tables. Nothing is dropped yet.
+    This creates the `larascord_accounts` and `larascord_access_tokens` tables. No table is dropped at this point.
 
-    ### Move your existing users over
-    Your version 7 `users` table holds the Discord profile with the snowflake as the `id`. The following migration copies every row into `larascord_accounts`, keeps the same `id` so your foreign keys stay valid, and moves the access tokens across.
+    ### Migrate the existing profiles
+    In version 7 the `users` table holds the Discord profile and the Discord ID is the primary key. The following migration copies each row into `larascord_accounts` and each token into `larascord_access_tokens`. The `user_id` is set to the existing `users.id`, so foreign keys referencing it remain valid.
 
     ```bash
     php artisan make:migration move_discord_profiles_to_larascord_accounts
@@ -117,11 +117,11 @@ Version 8 keeps to itself:
     ```
 
     <Callout type="info">
-        The access tokens are encrypted with your `APP_KEY` and are copied across as they are, so your users stay logged in to Discord without having to authorize your application again.
+        The access tokens are encrypted with your `APP_KEY` and are copied unchanged, so users do not have to authorize the application again.
     </Callout>
 
-    ### Clean up your `users` table
-    The Discord columns are now stored by Larascord. Drop the ones you do not use yourself and add whatever your application needs, for example a `name` column.
+    ### Clean up the `users` table
+    The Discord columns are now stored in `larascord_accounts`. Drop the columns your application does not use and add the ones it requires, for example a `name` column.
 
     ```bash
     php artisan make:migration clean_up_users_table
@@ -167,7 +167,9 @@ Version 8 keeps to itself:
 
         public function down(): void
         {
-            //
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('name');
+            });
         }
     };
     ```
@@ -177,11 +179,11 @@ Version 8 keeps to itself:
     ```
 
     <Callout type="warning">
-        Keep any column you query yourself. If your application reads `$user->username` in a view or a job, either keep the column and fill it yourself, or read it from `$user->discordAccount->username` instead.
+        Keep any column your application queries. Code reading `$user->username` has to either keep the column populated or read `$user->discordAccount->username` instead.
     </Callout>
 
-    ### Update your `User` model
-    Version 7 shipped an `App\Models\User` that belonged to Larascord. The model is yours now. Remove every Discord column from `$fillable` and `$casts` and keep the trait only if you use its methods.
+    ### Update the `User` model
+    Version 7 published an `App\Models\User` model. Remove the Discord columns from `$fillable` and `$casts`. The `InteractsWithDiscord` trait is optional and only required if you use its methods.
 
     ```php filename="app/Models/User.php" showLineNumbers {4, 8, 14}
     namespace App\Models;
@@ -200,8 +202,8 @@ Version 8 keeps to itself:
     }
     ```
 
-    ### Rename the trait methods you call
-    The trait no longer holds the Discord profile itself, so its methods are prefixed and no longer collide with anything in your own model.
+    ### Update the trait method calls
+    The trait methods are prefixed in version 8 and delegate to the linked `DiscordAccount`.
 
     | Version 7 | Version 8 |
     | --- | --- |
@@ -215,7 +217,7 @@ Version 8 keeps to itself:
     | `$user->joinGuild($guildId)` | `$user->joinDiscordGuild($guildId)` |
     | `$user->getConnections()` | `$user->getDiscordConnections()` |
 
-    The Discord profile itself is read from the account:
+    The Discord profile is read from the account:
 
     ```php
     $user->discordAccount->username;
@@ -223,8 +225,8 @@ Version 8 keeps to itself:
     $user->discordAccount->tag;
     ```
 
-    ### Update your routes and your links
-    Larascord no longer registers `login`, `logout`, `password.confirm` or `profile.destroy`, and `larascord.login` has been renamed.
+    ### Update the route names
+    The `login`, `logout`, `password.confirm` and `profile.destroy` routes are no longer registered, and `larascord.login` has been renamed.
 
     | Version 7 | Version 8 |
     | --- | --- |
@@ -235,52 +237,55 @@ Version 8 keeps to itself:
     | `route('profile.destroy')` | `route('larascord.unlink')` |
 
     <Callout type="info">
-        If your application relies on a route named `login`, set `LARASCORD_LOGIN_ALIAS=true` in your `.env` file and Larascord will register one that redirects to Discord.
+        Set `LARASCORD_LOGIN_ALIAS=true` in your `.env` file to register a route named `login` that redirects to Discord.
     </Callout>
 
-    The callback URL is unchanged, so you do not have to touch your Discord application's redirect urls.
+    The callback URL is unchanged. The redirect urls registered with Discord do not have to be updated.
 
-    ### Update the scopes in your `.env` file
-    Scopes are a comma separated list now and the variable has been renamed.
+    ### Update the scopes in the `.env` file
+    The variable has been renamed and takes a comma separated list.
 
     ```diff filename=".env"
     - LARASCORD_SCOPE=identify&email
     + LARASCORD_SCOPES=identify,email
     ```
 
-    ### Check your redirect after login
-    The `redirect_login` option still exists and two more were added: `redirect_logout` and `redirect_unlink`.
+    ### Review the redirect options
+    The `redirect_login` option is unchanged. `redirect_logout` and `redirect_unlink` have been added.
 </Steps>
 
-## Other changes worth knowing
+## Other changes
 
-### The callback is protected against CSRF
-Larascord sends a `state` parameter to Discord and verifies it when the user comes back. If you build the authorization URL yourself, use `Larascord::authorizationUrl()` so the state is generated for you, or set `verify_state` to `false`.
+### State verification
+The authorization URL now includes a `state` parameter, which is verified on the callback. When building the URL manually, use `Larascord::authorizationUrl()` and store the state in the session, or set `verify_state` to `false`.
 
-### Events are real now
-Version 7 copied event classes into `app/Events` during installation. Version 8 dispatches its own events from the package and you listen to them like any other event.
+### Events
+Version 7 copied event classes into `app/Events` during installation. Version 8 dispatches the following events from the package.
 
 | Event | Dispatched when |
 | --- | --- |
-| `Jakyeru\Larascord\Events\DiscordAccountCreated` | A Discord account is stored for the first time |
-| `Jakyeru\Larascord\Events\DiscordAccountUpdated` | A known Discord account comes back |
-| `Jakyeru\Larascord\Events\DiscordAccountLinked` | A Discord account is attached to one of your users |
-| `Jakyeru\Larascord\Events\DiscordAccountUnlinked` | A Discord account is removed |
-| `Jakyeru\Larascord\Events\UserAuthenticated` | A user is logged in through Discord |
+| `Jakyeru\Larascord\Events\DiscordAccountCreated` | A Discord account is inserted into `larascord_accounts` |
+| `Jakyeru\Larascord\Events\DiscordAccountUpdated` | An existing Discord account is updated |
+| `Jakyeru\Larascord\Events\DiscordAccountLinked` | A Discord account is assigned a `user_id` |
+| `Jakyeru\Larascord\Events\DiscordAccountUnlinked` | A Discord account is deleted |
+| `Jakyeru\Larascord\Events\UserAuthenticated` | The callback completes a login |
 
-You can delete the classes version 7 left in `app/Events` and their listeners.
+The classes in `app/Events` published by version 7 and their listeners can be deleted.
 
-### Logging in while already logged in
-Version 7 logged the user out and showed the `invalid_user` message when the Discord account did not match the session. Version 8 treats `larascord.redirect` and the `/login` alias as a login whether or not somebody is signed in: the Discord profile is refreshed, the session is kept when it belongs to the same user, and the account that owns the Discord profile is logged in when it does not. Use `larascord.link` to attach a Discord account to the user who is already signed in.
+### Authenticated users on the login routes
+Version 7 logged the user out and returned the `invalid_user` message when the Discord account did not match the session. In version 8, `larascord.redirect` and the login alias are login routes regardless of whether a session exists. The Discord profile is updated, the session is kept when the resolved user matches the authenticated user, and the resolved user is logged in when it does not.
+
+Use `larascord.link` to attach a Discord account to the authenticated user.
 
 ### Soft deleted users
-Version 7 refused to log in a soft deleted user and had a `user_deleted` message for it. Your `users` table is yours now, so do this yourself in a listener on `UserAuthenticated`, or in your authentication guard.
+Version 7 rejected soft deleted users and provided a `user_deleted` message. The `users` table is no longer managed by Larascord, so this check has to be implemented in a listener on `UserAuthenticated` or in the authentication guard.
 
-### `DiscordService::joinGuild` takes a Discord ID
+### DiscordService::joinGuild
+The second argument is now the Discord ID instead of the user model.
 ```diff
 - (new DiscordService())->joinGuild($accessToken, $user, $guildId);
 + (new DiscordService())->joinGuild($accessToken, $discordId, $guildId);
 ```
 
-### `DiscordService::createOrUpdateUser` was removed
-Use `Larascord::syncAccount($discordUser, $user)` instead.
+### DiscordService::createOrUpdateUser
+The method has been removed. Use `Larascord::syncAccount($discordUser, $user)` instead.
