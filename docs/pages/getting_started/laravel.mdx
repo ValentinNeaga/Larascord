@@ -1,7 +1,7 @@
 import { Steps, Callout } from 'nextra-theme-docs'
 
-<Callout type="warning">
-    You must install Larascord in a fresh Laravel application otherwise unexpected behavior may occur.
+<Callout type="info">
+    Larascord can be installed in a new application or in an application that already has a `users` table, authentication and views.
 </Callout>
 
 <Steps>
@@ -14,10 +14,157 @@ import { Steps, Callout } from 'nextra-theme-docs'
     ```bash
     php artisan larascord:install
     ```
+    The command asks for your Discord application's credentials, writes them to the `.env` file, publishes the configuration file and the migrations, and runs them.
 
-    ### Follow the instructions from the command
+    ### Add a link to the login route
+    ```blade filename="resources/views/welcome.blade.php"
+    <a href="{{ route('larascord.redirect') }}">Log in with Discord</a>
+    ```
 </Steps>
 
 <Callout type="info">
     You can get your Discord application's `CLIENT ID` and `CLIENT SECRET` from the `OAuth2` tab of your application.
 </Callout>
+
+## Installed files
+
+| Type | Location |
+| --- | --- |
+| Configuration | `config/larascord.php` |
+| Migrations | `database/migrations` |
+| Tables | `larascord_accounts`, `larascord_access_tokens` |
+| Routes | The configured prefix, named with a `larascord.` prefix |
+
+## User resolution
+
+The Discord profile is stored in the `larascord_accounts` table and linked to your user model through a `user_id` foreign key.
+
+On the callback, the user is resolved in the following order:
+
+<Steps>
+    ### A linked Discord account
+    The account matching the Discord ID is looked up in `larascord_accounts`. If it has a `user_id`, that user is logged in.
+
+    ### An existing user with the same e-mail address
+    The e-mail address of the Discord account is matched against the column set in `users.email_column`. Controlled by the `users.link_by_email` option.
+
+    ### A new user
+    A user is created from the `users.attributes` mapping. Controlled by the `users.create_missing` option.
+</Steps>
+
+If no user is resolved, the request is redirected with the `registration_disabled` error message.
+
+## Attribute mapping
+
+The `users.attributes` option maps the columns of your `users` table to the attributes of the Discord profile.
+
+```php filename="config/larascord.php" showLineNumbers
+'users' => [
+    'model' => App\Models\User::class,
+    'email_column' => 'email',
+    'attributes' => [
+        'name' => 'display_name',
+        'email' => 'email',
+    ],
+    'link_by_email' => true,
+    'create_missing' => true,
+    'fill_random_password' => true,
+],
+```
+
+The available attributes are `id`, `username`, `global_name`, `display_name`, `discriminator`, `avatar`, `email`, `verified`, `banner`, `banner_color`, `accent_color`, `locale`, `mfa_enabled`, `premium_type` and `public_flags`.
+
+<Callout type="info">
+    `display_name` returns `global_name` and falls back to `username` when the account has no global display name.
+</Callout>
+
+When `users.fill_random_password` is enabled and the `users` table has a `password` column that is not present in the mapping, the column is filled with a hashed random string.
+
+## Custom resolver
+
+Register a callback in the `boot` method of a service provider to resolve the user yourself. It receives the Discord profile and returns an `Authenticatable`, or `null` to reject the login.
+
+```php filename="app/Providers/AppServiceProvider.php" showLineNumbers
+use Jakyeru\Larascord\Facades\Larascord;
+use Jakyeru\Larascord\Types\User as DiscordUser;
+
+public function boot(): void
+{
+    Larascord::resolveUsersUsing(function (DiscordUser $discordUser) {
+        return User::firstOrCreate(['email' => $discordUser->email], [
+            'name' => $discordUser->display_name,
+            'team_id' => Team::default()->id,
+        ]);
+    });
+}
+```
+
+## Linking an existing user
+
+An authenticated user can link a Discord account through the `larascord.link` route. The Discord account is attached to the authenticated user instead of resolving a new one.
+
+```blade
+@if (auth()->user()->hasDiscordAccount())
+    <form method="POST" action="{{ route('larascord.unlink') }}">
+        @csrf
+        @method('DELETE')
+        <button>Unlink Discord</button>
+    </form>
+@else
+    <a href="{{ route('larascord.link') }}">Link Discord</a>
+@endif
+```
+
+<Callout type="info">
+    `hasDiscordAccount()` is provided by the `InteractsWithDiscord` trait. Without the trait, use `Jakyeru\Larascord\Models\DiscordAccount::forUser($user)`.
+</Callout>
+
+## The InteractsWithDiscord trait
+
+The trait is optional. It adds the `discordAccount` relationship and the methods documented in [InteractsWithDiscord Trait](/interacts_with_discord) to your user model.
+
+```php filename="app/Models/User.php" showLineNumbers {4, 8}
+namespace App\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Jakyeru\Larascord\Traits\InteractsWithDiscord;
+
+class User extends Authenticatable
+{
+    use InteractsWithDiscord;
+}
+```
+
+## The login route alias
+
+Laravel's `auth` middleware redirects guests to a route named `login`. Larascord registers one when `LARASCORD_LOGIN_ALIAS` is enabled.
+
+```dotenv filename=".env"
+LARASCORD_LOGIN_ALIAS=true
+```
+
+<Callout type="warning">
+    Keep this disabled if your application already registers a route named `login`. The route registered last takes precedence.
+</Callout>
+
+## Uninstalling
+
+<Steps>
+    ### Roll back the migrations
+    ```bash
+    php artisan migrate:rollback --path=database/migrations/2026_01_01_000001_create_larascord_access_tokens_table.php
+    ```
+    ```bash
+    php artisan migrate:rollback --path=database/migrations/2026_01_01_000000_create_larascord_accounts_table.php
+    ```
+
+    ### Remove the package
+    ```bash
+    composer remove jakyeru/larascord
+    ```
+
+    ### Delete the remaining files
+    * `config/larascord.php`
+    * The two migration files
+    * The `InteractsWithDiscord` trait, if it was added to your user model
+</Steps>

@@ -1,0 +1,96 @@
+import { Callout } from 'nextra-theme-docs'
+
+The `Larascord` facade resolves `Jakyeru\Larascord\Larascord` from the container.
+
+```php
+use Jakyeru\Larascord\Facades\Larascord;
+```
+
+## authorizationUrl
+
+Returns the Discord authorization URL built from `config/larascord.php`. Use it to start the flow outside of the `larascord.redirect` route.
+
+```php copy=false
+/**
+* Get the Discord authorization URL.
+*
+* @return string
+*/
+```
+
+```php showLineNumbers
+$state = Larascord::generateState();
+
+session()->put(Larascord::STATE_KEY, $state);
+
+return redirect()->away(Larascord::authorizationUrl($state));
+```
+
+<Callout type="warning">
+    When `verify_state` is enabled, the state passed to the URL must be the state stored in the session under `Larascord::STATE_KEY`. The callback rejects the request otherwise.
+</Callout>
+
+## resolveUsersUsing
+
+Registers a callback that resolves the user a Discord account belongs to. Call it in the `boot` method of a service provider.
+
+```php copy=false
+/**
+* Register a callback used to resolve the application user.
+*
+* @return static
+*/
+```
+
+```php filename="app/Providers/AppServiceProvider.php" showLineNumbers
+use App\Models\User;
+use Jakyeru\Larascord\Facades\Larascord;
+use Jakyeru\Larascord\Types\User as DiscordUser;
+
+public function boot(): void
+{
+    Larascord::resolveUsersUsing(function (DiscordUser $discordUser) {
+        return User::where('discord_handle', $discordUser->username)->first();
+    });
+}
+```
+
+<Callout type="info">
+    Returning `null` rejects the login. The user is redirected with the `registration_disabled` error message.
+</Callout>
+
+The resolver can also be replaced in the container by binding `Jakyeru\Larascord\Contracts\ResolvesUsers`.
+
+```php
+$this->app->bind(ResolvesUsers::class, MyUserResolver::class);
+```
+
+## syncAccount
+
+Creates or updates the Discord account matching the given profile and assigns the `user_id`.
+
+```php copy=false
+/**
+* Create or update the Discord account belonging to the given Discord user.
+*
+* @return Jakyeru\Larascord\Models\DiscordAccount
+*/
+```
+
+## scopes and hasScope
+
+`scopes` returns the configured scopes as a space delimited string. `hasScope` returns whether a scope is configured.
+
+| Call | Returns |
+| --- | --- |
+| `Larascord::scopes()` | `identify email` |
+| `Larascord::hasScope('identify')` | `true` |
+| `Larascord::hasScope('guilds')` | `false` |
+
+## version
+
+Returns the Larascord version, for example `8.0.0`.
+
+```php
+Larascord::version();
+```

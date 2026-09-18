@@ -2,29 +2,22 @@
   "index": "Introduction",
   "version_compatibility": "Version Compatibility",
   "upgrade_guides": "Upgrade Guides",
-
   "installation_separator": {
     "title": "Installation",
     "type": "separator"
   },
-
   "getting_started": "Getting Started",
-
   "configuration": "Configuration",
-
   "events": "Larascord Events",
-
   "routes": "Routes",
-
   "errors": "Possible Errors",
-
   "api_separator": {
     "title": "API",
     "type": "separator"
   },
-
+  "larascord_facade": "Larascord Facade",
+  "discord_account": "DiscordAccount Model",
   "interacts_with_discord": "InteractsWithDiscord Trait",
-
   "contact": {
     "title": "Contact ↗",
     "type": "page",

@@ -20,6 +20,11 @@ class User
     public ?string $global_name;
 
     /**
+     * The user's display name, falling back to the username.
+     */
+    public string $display_name;
+
+    /**
      * The user's discriminator.
      */
     public ?string $discriminator;
@@ -57,12 +62,12 @@ class User
     /**
      * The user's locale.
      */
-    public string $locale;
+    public ?string $locale;
 
     /**
      * The user's multifactor authentication status.
      */
-    public bool $mfa_enabled;
+    public ?bool $mfa_enabled;
 
     /**
      * The user's premium type.
@@ -87,6 +92,7 @@ class User
         $this->id = $data->id;
         $this->username = $data->username;
         $this->global_name = $data->global_name ?? NULL;
+        $this->display_name = $this->global_name ?: $this->username;
         $this->discriminator = $data->discriminator ?? NULL;
         $this->avatar = $data->avatar ?? NULL;
         $this->email = $data->email ?? NULL;
@@ -94,8 +100,8 @@ class User
         $this->banner = $data->banner ?? NULL;
         $this->banner_color = $data->banner_color ?? NULL;
         $this->accent_color = $data->accent_color ?? NULL;
-        $this->locale = $data->locale;
-        $this->mfa_enabled = $data->mfa_enabled;
+        $this->locale = $data->locale ?? NULL;
+        $this->mfa_enabled = $data->mfa_enabled ?? NULL;
         $this->premium_type = $data->premium_type ?? NULL;
         $this->public_flags = $data->public_flags ?? NULL;
         $this->access_token = NULL;
@@ -122,15 +128,23 @@ class User
     /**
      * Get the user's global display name.
      */
-    public function getGlobalName(): string
+    public function getGlobalName(): ?string
     {
         return $this->global_name;
     }
 
     /**
+     * Get the user's display name.
+     */
+    public function getDisplayName(): string
+    {
+        return $this->display_name;
+    }
+
+    /**
      * Get the user's discriminator.
      */
-    public function getDiscriminator(): string
+    public function getDiscriminator(): ?string
     {
         return $this->discriminator;
     }
@@ -141,7 +155,7 @@ class User
     public function getTag(): string
     {
         if ($this->hasMigratedToUsernames()) {
-            return $this->global_name;
+            return $this->display_name;
         }
 
         return $this->username . '#' . $this->discriminator;
@@ -198,7 +212,7 @@ class User
     /**
      * Get the user's locale.
      */
-    public function getLocale(): string
+    public function getLocale(): ?string
     {
         return $this->locale;
     }
@@ -206,7 +220,7 @@ class User
     /**
      * Get the user's multifactor authentication status.
      */
-    public function getMfaEnabled(): bool
+    public function getMfaEnabled(): ?bool
     {
         return $this->mfa_enabled;
     }
@@ -259,7 +273,7 @@ class User
     public function toArray(): array
     {
         return [
-            'id' => $this->id,
+            'discord_id' => $this->id,
             'username' => $this->username,
             'global_name' => $this->global_name,
             'discriminator' => $this->discriminator,
@@ -273,8 +287,6 @@ class User
             'mfa_enabled' => $this->mfa_enabled,
             'premium_type' => $this->premium_type,
             'public_flags' => $this->public_flags,
-            'access_token' => $this->access_token?->access_token,
-            'refresh_token' => $this->access_token?->refresh_token,
         ];
     }
 }

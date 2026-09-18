@@ -1,0 +1,82 @@
+import { Callout } from 'nextra-theme-docs'
+
+## What is the DiscordAccount model?
+
+`Jakyeru\Larascord\Models\DiscordAccount` represents a row in the `larascord_accounts` table. It holds the Discord profile and a `user_id` foreign key pointing at your user model.
+
+## Retrieving an account
+
+```php
+use Jakyeru\Larascord\Models\DiscordAccount;
+
+$account = DiscordAccount::forUser(auth()->user());
+
+$account = DiscordAccount::forDiscordId('81384788765712384');
+
+$account = auth()->user()->discordAccount;
+```
+
+<Callout type="info">
+    The `discordAccount` relationship requires the `InteractsWithDiscord` trait on your user model. `forUser` and `forDiscordId` do not.
+</Callout>
+
+## Attributes
+
+| Attribute | Type | Description |
+|:---|:---|:---|
+| `user_id` | mixed | The primary key of the linked user. |
+| `discord_id` | string | The user's Discord ID. |
+| `username` | string | The user's unique Discord username. |
+| `global_name` | string | The user's global display name. |
+| `display_name` | string | `global_name`, falling back to `username`. |
+| `tag` | string | The user's tag, for example `jakye` or `jakye#0001`. |
+| `discriminator` | string | The user's discriminator. |
+| `email` | string | The e-mail address of the Discord account. |
+| `avatar` | string | The avatar hash. |
+| `verified` | bool | Whether the e-mail address is verified. |
+| `banner` | string | The banner hash. |
+| `banner_color` | string | The banner color. |
+| `accent_color` | string | The accent color. |
+| `locale` | string | The user's locale. |
+| `mfa_enabled` | bool | Whether the user has multifactor authentication enabled. |
+| `premium_type` | int | The user's Nitro subscription type. |
+| `public_flags` | int | The user's public flags. |
+
+<Callout type="info">
+    `display_name` and `tag` are accessors. The remaining attributes are columns of the `larascord_accounts` table.
+</Callout>
+
+## Relationships
+
+```php
+$account->user;
+
+$account->accessToken;
+```
+
+## Methods
+
+The account exposes the Discord API methods documented in [InteractsWithDiscord Trait](/interacts_with_discord).
+
+```php
+$account->getAvatar(['size' => 64]);
+$account->getAccessToken();
+$account->refreshAccessToken();
+$account->getGuilds();
+$account->getGuildMember('81384788765712384');
+$account->joinGuild('81384788765712384');
+$account->getConnections();
+```
+
+### revoke
+<Callout type="warning">
+    This method revokes the OAuth2 access token with Discord and deletes the row from `larascord_accounts`. The linked user is not deleted.
+</Callout>
+```php copy=false
+/**
+* Revoke the access token and delete the account.
+*
+* @return bool
+* @throws Illuminate\Http\Client\RequestException
+*/
+```

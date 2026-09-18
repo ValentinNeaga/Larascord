@@ -1,47 +1,24 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
-|
-*/
-
-use App\Http\Controllers\Auth\AuthenticatedSessionController;
-use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use Jakyeru\Larascord\Http\Controllers\DiscordController;
 
-Route::redirect('/login', 'https://discord.com/oauth2/authorize?client_id=' . config('larascord.client_id')
-    . '&redirect_uri=' . config('larascord.redirect_uri')
-    . '&response_type=code&scope=' . implode('%20', explode('&', config('larascord.scopes')))
-    . '&prompt=' . config('larascord.prompt', 'none'))
-    ->middleware(['web', 'guest'])
-    ->name('login');
+Route::group([
+    'prefix' => config('larascord.routes.prefix', 'larascord'),
+    'middleware' => config('larascord.routes.middleware', ['web']),
+], function () {
+    Route::get('/redirect', [DiscordController::class, 'redirect'])->name('larascord.redirect');
+    Route::get('/callback', [DiscordController::class, 'callback'])->name('larascord.callback');
+    Route::post('/logout', [DiscordController::class, 'logout'])->name('larascord.logout');
 
-Route::get('/confirm-password', [ConfirmablePasswordController::class, 'show'])
-    ->middleware(['web', 'auth'])
-    ->name('password.confirm');
-
-Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
-    ->middleware(['web', 'auth'])
-    ->name('logout');
-
-Route::group(['prefix' => config('larascord.route_prefix', 'larascord'), 'middleware' => ['web']], function() {
-    Route::get('/callback', [DiscordController::class, 'handle'])
-        ->name('larascord.login');
-
-    Route::redirect('/refresh-token', 'https://discord.com/oauth2/authorize?client_id=' . config('larascord.client_id')
-        . '&redirect_uri=' . config('larascord.redirect_uri')
-        . '&response_type=code&scope=' . implode('%20', explode('&', config('larascord.scopes')))
-        . '&prompt=' . config('larascord.prompt', 'none'))
-        ->middleware(['web', 'auth'])
-        ->name('larascord.refresh_token');
+    Route::middleware(config('larascord.routes.authenticated_middleware', ['web', 'auth']))->group(function () {
+        Route::get('/link', [DiscordController::class, 'link'])->name('larascord.link');
+        Route::delete('/unlink', [DiscordController::class, 'unlink'])->name('larascord.unlink');
+    });
 });
 
-Route::delete('/profile', [DiscordController::class, 'destroy'])->middleware(['web', 'auth', 'password.confirm'])->name('profile.destroy');
+if (config('larascord.routes.login_alias', false)) {
+    Route::get('/login', [DiscordController::class, 'redirect'])
+        ->middleware(config('larascord.routes.middleware', ['web']))
+        ->name('login');
+}

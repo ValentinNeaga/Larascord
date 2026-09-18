@@ -1,42 +1,80 @@
 import { Callout } from 'nextra-theme-docs'
 
 ## What is InteractsWithDiscord Trait?
-The `InteractsWithDiscord.php` trait adds useful methods to the `User` model that can be used to interact with `Discord`'s API.
+The `InteractsWithDiscord.php` trait adds the `discordAccount` relationship and a set of methods that delegate to the linked [DiscordAccount](/discord_account).
 
-## getTagAttribute
 <Callout type="info">
-    This method will return the user's tag in the format of `username#discriminator`. If the user migrated to the new username system, it will return the user's display name, for example `Jakye`.
+    The trait is optional. The same methods are available on the account itself, which can be retrieved with `DiscordAccount::forUser($user)`.
 </Callout>
-```php copy=false
-/**
-* Get the user's tag attribute.
-*
-* @return string
-*/
+
+```php filename="app/Models/User.php" showLineNumbers {4, 8}
+namespace App\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Jakyeru\Larascord\Traits\InteractsWithDiscord;
+
+class User extends Authenticatable
+{
+    use InteractsWithDiscord;
+}
 ```
 
-## accessToken
+## discordAccount
 ```php copy=false
 /**
-* Returns the user's access token relationship.
+* Get the user's Discord account relationship.
 *
 * @return \Illuminate\Database\Eloquent\Relations\HasOne
 */
 ```
 
-## getAccessToken
+## hasDiscordAccount
+```php copy=false
+/**
+* Determine whether the user has linked a Discord account.
+*
+* @return bool
+*/
+```
+
+## getDiscordTag
+<Callout type="info">
+    This method returns the user's tag in the format `username#discriminator`. For accounts migrated to the new username system, it returns the username, followed by the display name in brackets, for example `jakye (Jakye)`.
+</Callout>
+```php copy=false
+/**
+* Get the user's Discord tag.
+*
+* @return string|null
+*/
+```
+
+## getDiscordAccessToken
 <Callout type="info">
     This method will try getting a new `access_token` using the `refresh_token` if the current `access_token` is expired.
 </Callout>
 ```php copy=false
 /**
-* Returns the user's access token.
+* Get the user's Discord access token.
 *
 * @return Jakyeru\Larascord\Types\AccessToken|null
 */
 ```
 
-## getConnections
+## unlinkDiscordAccount
+<Callout type="warning">
+    This method revokes the OAuth2 access token with Discord and deletes the row from `larascord_accounts`. The user is not deleted.
+</Callout>
+```php copy=false
+/**
+* Revoke the access token and unlink the user's Discord account.
+*
+* @return bool
+* @throws Illuminate\Http\Client\RequestException
+*/
+```
+
+## getDiscordConnections
 <Callout type="warning">
     This method will make a request to Discord's API. It is recommended to cache the response.
 </Callout>
@@ -57,7 +95,7 @@ use \Illuminate\Support\Facades\Log;
 $user = auth()->user();
 
 try {
-    $connections = $user->getConnections();
+    $connections = $user->getDiscordConnections();
 
     Log::info(json_encode($connections->first()));
     /*
@@ -78,7 +116,7 @@ try {
  }
 ```
 
-## getAvatar
+## getDiscordAvatar
 <Callout type="info">
     This method generates the cdn url for user's avatars with a fallback image if the user does not have an avatar.
 </Callout>
@@ -96,7 +134,7 @@ try {
 ### Example
 ```php showLineNumbers
 
-<img src="{{ Auth::user()->getAvatar('webp', 64, 2) }}" alt="{{ Auth::user()->getTagAttribute() }}" />
+<img src="{{ Auth::user()->getDiscordAvatar(['extension' => 'webp', 'size' => 64, 'color' => 2]) }}" alt="{{ Auth::user()->getDiscordTag() }}" />
 /**
 * This will fetch the user's avatar with:
 * - webp extension (fallback image will be png).
@@ -105,7 +143,7 @@ try {
 */
 ```
 
-## getGuilds
+## getDiscordGuilds
 <Callout type="warning">
     This method will make a request to Discord's API. It is recommended to cache the response.
 </Callout>
@@ -134,7 +172,7 @@ use \Illuminate\Support\Facades\Log;
 $user = auth()->user();
 
 try {
-    $guilds = $user->getGuilds(true);
+    $guilds = $user->getDiscordGuilds(true);
 
     Log::info(json_encode($guilds->first()));
     /*
@@ -158,7 +196,7 @@ try {
  }
 ```
 
-## getGuildMember
+## getDiscordGuildMember
 <Callout type="warning">
     This method will make a request to Discord's API. It is recommended to cache the response.
 </Callout>
@@ -179,7 +217,7 @@ use \Illuminate\Support\Facades\Log;
 $user = auth()->user();
 
 try {
-    $guildMember = $user->getGuildMember('123456789012345678');
+    $guildMember = $user->getDiscordGuildMember('123456789012345678');
 
     Log::info(json_encode($guildMember));
     /*
@@ -199,7 +237,7 @@ try {
  }
 ```
 
-## joinGuild
+## joinDiscordGuild
 <Callout type="warning">
     The bot's access token must be set in `.env` as `LARASCORD_ACCESS_TOKEN`.
 </Callout>
@@ -239,7 +277,7 @@ use \Illuminate\Support\Facades\Log;
 $user = auth()->user();
 
 try {
-    $guildMember = $user->joinGuild('81384788765712384', [
+    $guildMember = $user->joinDiscordGuild('81384788765712384', [
         'roles' => ['81384788765712384'],
         'nick' => 'Test'
     ]);

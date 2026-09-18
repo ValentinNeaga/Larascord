@@ -22,7 +22,10 @@
         "laravel": {
             "providers": [
                 "Jakyeru\\Larascord\\LarascordServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "Larascord": "Jakyeru\\Larascord\\Facades\\Larascord"
+            }
         }
     },
     "require-dev": {
@@ -31,7 +34,6 @@
     "require": {
         "php": "^8.2",
         "laravel/framework": "^13",
-        "guzzlehttp/guzzle": "^8",
-        "laravel/breeze": "^2"
+        "guzzlehttp/guzzle": "^8"
     }
 }

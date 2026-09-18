@@ -5,8 +5,6 @@ namespace Jakyeru\Larascord\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Validator;
-use Symfony\Component\Finder\Finder;
-use Symfony\Component\Process\Process;
 
 class InstallCommand extends Command
 {
@@ -16,7 +14,10 @@ class InstallCommand extends Command
      * @var string
      */
     protected $signature = 'larascord:install
-                            {--composer=global : Absolute path to the Composer binary which should be used to install packages}';
+                            {--client-id= : The Discord application\'s client id}
+                            {--client-secret= : The Discord application\'s client secret}
+                            {--prefix= : The route prefix Larascord should use}
+                            {--force : Overwrite the existing configuration file}';
 
     /**
      * The console command description.
@@ -46,95 +47,54 @@ class InstallCommand extends Command
      */
     private ?string $prefix;
 
-    /*
-     * Whether dark mode should be enabled.
-     *
-     * @var bool|null
-     */
-    private ?bool $darkMode;
-
     /**
      * Execute the console command.
      */
-    public function handle(): void
+    public function handle(): int
     {
-        // Getting the user's input
-        $this->clientId = $this->ask('What is your Discord application\'s client id?');
-        $this->clientSecret = $this->ask('What is your Discord application\'s client secret?');
-        $this->prefix = $this->ask('What route prefix should Larascord use?', 'larascord');
-        $this->darkMode = $this->confirm('Do you want to install laravel/breeze with dark mode?', true);
+        $this->clientId = $this->option('client-id') ?: $this->ask('What is your Discord application\'s client id?');
+        $this->clientSecret = $this->option('client-secret') ?: $this->ask('What is your Discord application\'s client secret?');
+        $this->prefix = $this->option('prefix') ?: $this->ask('What route prefix should Larascord use?', 'larascord');
 
-        // Validating the user's input
-        try {$this->validateInput();} catch (\Exception $e) {$this->error($e->getMessage()); return;}
+        try {
+            $this->validateInput();
+        } catch (\Exception $e) {
+            $this->error($e->getMessage());
 
-        // Installing laravel/breeze
-        $this->info('Installing Laravel Breeze...');
-        if ($this->darkMode) {
-            shell_exec('php artisan breeze:install blade --dark');
-        } else {
-            shell_exec('php artisan breeze:install blade');
+            return self::FAILURE;
         }
 
-        // Appending the secrets to the .env file
-        $this->info('Appending the secrets to the .env file...');
-        $this->appendToEnvFile();
+        $this->info('Writing the credentials to the .env file...');
+        $this->writeToEnvFile();
 
-        // Creating the user migration files
-        $this->info('Creating the user migration files...');
-        $this->createUserMigrationFiles();
+        $this->info('Publishing the configuration file...');
+        $this->call('larascord:publish', array_filter([
+            '--force' => $this->option('force'),
+        ]));
 
-        // Create the model files
-        $this->info('Creating the user model files...');
-        $this->createModelFiles();
+        $this->info('Publishing the migrations...');
+        $this->call('vendor:publish', [
+            '--provider' => 'Jakyeru\Larascord\LarascordServiceProvider',
+            '--tag' => 'larascord-migrations',
+        ]);
 
-        // Create the view files
-        $this->info('Creating the view files...');
-        $this->createViewFiles();
-
-        // Create the event files
-        $this->info('Creating the event files...');
-        $this->createEventFiles();
-
-        // Remove Laravel Breeze routes
-        $this->info('Replacing the Laravel Breeze routes...');
-        $this->replaceBreezeRoutes();
-
-        // Asking the user to build the assets
-        if ($this->confirm('Do you want to build the assets?', true)) {
-            try {
-                shell_exec('npm install --silent');
-                shell_exec('npm run build --silent');
-            } catch (\Exception $e) {
-                $this->error($e->getMessage());
-                $this->comment('Please execute the "npm install && npm run build" command to build your assets.');
-            }
-        } else {
-            $this->comment('Please execute the "npm install && npm run build" command to build your assets.');
-        }
-
-        // Asking the user to migrate the database
-        if ($this->confirm('Do you want to run the migrations? This will delete all the data in the database.', true)) {
-            try {
-                $this->call('migrate:reset');
-                $this->call('migrate:fresh');
-            } catch (\Exception $e) {
-                $this->error($e->getMessage());
-                $this->comment('You can run the migrations later by running the command:');
-                $this->comment('php artisan migrate');
-            }
+        if ($this->confirm('Do you want to run the migrations?', true)) {
+            $this->call('migrate');
         } else {
             $this->comment('You can run the migrations later by running the command:');
             $this->comment('php artisan migrate');
         }
 
-        // Automatically publishing the configuration file
-        $this->info('Publishing the configuration file...');
-        $this->call('larascord:publish');
-
-        $this->alert('Please make sure you add "' . env('APP_URL', 'http://localhost:8000') . '/' . env('LARASCORD_PREFIX', 'larascord') . '/callback' . '" to your Discord application\'s redirect urls in the OAuth2 tab.');
+        $this->newLine();
+        $this->alert('Please make sure you add "' . $this->redirectUri() . '" to your Discord application\'s redirect urls in the OAuth2 tab.');
         $this->warn('If the domain doesn\'t match your current environment\'s domain you need to set it manually in the .env file. (APP_URL)');
-
+        $this->newLine();
+        $this->comment('Point your users to the "larascord.redirect" route to start the login flow:');
+        $this->comment('<a href="{{ route(\'larascord.redirect\') }}">Log in with Discord</a>');
+        $this->newLine();
         $this->info('Larascord has been successfully installed!');
+
+        return self::SUCCESS;
     }
 
     /**
@@ -160,90 +120,51 @@ class InstallCommand extends Command
     }
 
     /**
-     * Append the secrets to the .env file.
+     * Write the credentials to the .env file without touching the existing values.
      */
-    protected function appendToEnvFile(): void
+    protected function writeToEnvFile(): void
     {
+        $values = [
+            'LARASCORD_CLIENT_ID' => $this->clientId,
+            'LARASCORD_CLIENT_SECRET' => $this->clientSecret,
+            'LARASCORD_GRANT_TYPE' => 'authorization_code',
+            'LARASCORD_PREFIX' => $this->prefix,
+            'LARASCORD_SCOPES' => 'identify,email',
+        ];
 
-        (new Filesystem())->append('.env',PHP_EOL);
+        $filesystem = new Filesystem();
+        $path = base_path('.env');
 
-        (new Filesystem())->append('.env',PHP_EOL);
-        (new Filesystem())->append('.env','LARASCORD_CLIENT_ID='.$this->clientId);
+        if (!$filesystem->exists($path)) {
+            $this->warn('No .env file was found. Please add the following values yourself:');
 
-        (new Filesystem())->append('.env',PHP_EOL);
-        (new Filesystem())->append('.env','LARASCORD_CLIENT_SECRET='.$this->clientSecret);
+            foreach ($values as $key => $value) {
+                $this->line($key . '=' . $value);
+            }
 
-        (new Filesystem())->append('.env',PHP_EOL);
-        (new Filesystem())->append('.env','LARASCORD_GRANT_TYPE=authorization_code');
-
-        (new Filesystem())->append('.env',PHP_EOL);
-        (new Filesystem())->append('.env','LARASCORD_PREFIX='.$this->prefix);
-
-        (new Filesystem())->append('.env',PHP_EOL);
-        (new Filesystem())->append('.env','LARASCORD_SCOPE=identify&email');
-    }
-
-    /**
-     * Create the user migration files.
-     */
-    public function createUserMigrationFiles(): void
-    {
-        (new Filesystem())->ensureDirectoryExists(database_path('migrations'));
-        (new Filesystem())->copyDirectory(__DIR__ . '/../../database/migrations/', database_path('migrations/'));
-    }
-
-    /**
-     * Create the user model files.
-     */
-    public function createModelFiles(): void
-    {
-        (new Filesystem())->ensureDirectoryExists(app_path('Models'));
-        (new Filesystem())->copy(__DIR__ . '/../../Models/User.php', app_path('Models/User.php'));
-    }
-
-    /**
-     * Create the view files.
-     */
-    public function createViewFiles(): void
-    {
-        (new Filesystem())->ensureDirectoryExists(resource_path('views'));
-        (new Filesystem())->copyDirectory(__DIR__ . '/../../resources/views', resource_path('views'));
-
-        if (!$this->darkMode) {
-            $this->removeDarkClasses((new Finder())
-                ->in(resource_path('views'))
-                ->name('*.blade.php')
-                ->notName('welcome.blade.php')
-            );
+            return;
         }
-    }
 
-    /**
-     * Create the event files.
-     */
-    public function createEventFiles(): void
-    {
-        (new Filesystem())->ensureDirectoryExists(app_path('Events'));
-        (new Filesystem())->copyDirectory(__DIR__ . '/../../Events/', app_path('Events/'));
-    }
+        $contents = $filesystem->get($path);
 
-    /**
-     * Removes Laravel Breeze's default routes and replaces them with Larascord's routes.
-     */
-    public function replaceBreezeRoutes(): void
-    {
-        (new Filesystem())->ensureDirectoryExists(resource_path('routes'));
-        (new Filesystem())->copy(__DIR__ . '/../../routes/web.php', base_path('routes/web.php'));
-        (new Filesystem())->delete(base_path('routes/auth.php'));
-    }
+        foreach ($values as $key => $value) {
+            if (preg_match('/^' . $key . '=.*$/m', $contents)) {
+                $contents = preg_replace('/^' . $key . '=.*$/m', $key . '=' . $value, $contents);
 
-    /**
-     * Remove Tailwind dark classes from the given files.
-     */
-    protected function removeDarkClasses(Finder $finder): void
-    {
-        foreach ($finder as $file) {
-            file_put_contents($file->getPathname(), preg_replace('/\sdark:[^\s"\']+/', '', $file->getContents()));
+                continue;
+            }
+
+            $contents = rtrim($contents, PHP_EOL) . PHP_EOL . $key . '=' . $value;
         }
+
+        $filesystem->put($path, rtrim($contents, PHP_EOL) . PHP_EOL);
+    }
+
+    /**
+     * Get the redirect uri the user has to register with Discord.
+     */
+    protected function redirectUri(): string
+    {
+        return rtrim(env('APP_URL', 'http://localhost:8000'), '/') . '/' . $this->prefix . '/callback';
     }
 }

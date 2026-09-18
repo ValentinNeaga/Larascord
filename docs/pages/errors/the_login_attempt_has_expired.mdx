@@ -1,0 +1,21 @@
+## The Login Attempt Has Expired
+This error occurs when the `state` parameter returned by Discord does not match the state stored in the session under `Larascord::STATE_KEY`.
+
+Common causes:
+* The session expired between the authorization page being opened and the application being authorized.
+* The callback route was requested directly instead of through `larascord.redirect`.
+* The authorization URL was built manually without storing the state in the session.
+
+When building the authorization URL manually, generate the state through the facade and store it before redirecting:
+
+```php
+use Jakyeru\Larascord\Facades\Larascord;
+
+$state = Larascord::generateState();
+
+session()->put(Larascord::STATE_KEY, $state);
+
+return redirect()->away(Larascord::authorizationUrl($state));
+```
+
+Set `verify_state` to `false` in `config/larascord.php` to disable the check.

@@ -2,180 +2,123 @@
 
 namespace Jakyeru\Larascord\Traits;
 
-use Jakyeru\Larascord\Models\DiscordAccessToken;
 use Exception;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
-use Jakyeru\Larascord\Services\DiscordService;
+use Jakyeru\Larascord\Models\DiscordAccount;
 use Jakyeru\Larascord\Types\AccessToken;
 use Jakyeru\Larascord\Types\GuildMember;
 
 trait InteractsWithDiscord
 {
     /**
-     * The Discord CDN base URL.
+     * Get the user's Discord account relationship.
      */
-    protected string $cdn = "https://cdn.discordapp.com";
-
-    /**
-     * Get the user's tag attribute.
-     */
-    public function getTagAttribute(): string
+    public function discordAccount(): HasOne
     {
-        if ($this->discriminator != 0) {
-            return $this->username . '#' . $this->discriminator;
-        }
-
-        if (!$this->global_name) {
-            return $this->username;
-        }
-
-        if ($this->username == $this->global_name) {
-            return $this->username;
-        }
-
-        return $this->username . ' (' . $this->global_name . ')';
+        return $this->hasOne(DiscordAccount::class, 'user_id');
     }
 
     /**
-     * Get the user's access token relationship.
+     * Determine whether the user has linked a Discord account.
      */
-    public function accessToken(): HasOne
+    public function hasDiscordAccount(): bool
     {
-        return $this->hasOne(DiscordAccessToken::class);
+        return $this->discordAccount()->exists();
     }
 
     /**
-     * Get the user's access token.
+     * Get the user's Discord tag.
      */
-    public function getAccessToken(): ?AccessToken
+    public function getDiscordTag(): ?string
     {
-        $accessToken = $this->accessToken()->first();
-
-        if ($accessToken && $accessToken->expires_at->isPast()) {
-            $accessToken = $this->refreshAccessToken();
-
-            return $accessToken ? new AccessToken($accessToken) : null;
-        }
-
-        return new AccessToken($accessToken);
+        return $this->discordAccount?->tag;
     }
 
     /**
-     * Refresh the user's access token.
+     * Get the user's Discord avatar url.
      */
-    public function refreshAccessToken(): ?AccessToken
+    public function getDiscordAvatar(array $options = []): ?string
     {
-        $accessToken = $this->accessToken()->first();
-        
-        if ($accessToken) {
-            try {
-                $response = (new DiscordService())->refreshAccessToken($accessToken->refresh_token);
-            } catch (RequestException $e) {
-                return null;
-            }
-
-            $accessToken->update([
-                'access_token' => $response->access_token,
-                'refresh_token' => $response->refresh_token,
-                'expires_at' => $response->expires_at,
-            ]);
-
-            return new AccessToken($accessToken);
-        }
-
-        return null;
+        return $this->discordAccount?->getAvatar($options);
     }
 
     /**
-    * Get the user's Avatar url
-    */
-    public function getAvatar(array $options = []): string
+     * Get the user's Discord access token.
+     */
+    public function getDiscordAccessToken(): ?AccessToken
     {
-        $extension = $options['extension'] ?? 'png';
-        $size = $options['size'] ?? 128;
-        $color = $options['color'] ?? 0;
-
-        if ($this->avatar) {
-            return $this->cdn . '/avatars/' . $this->id . '/' . $this->avatar . '.' . $extension . ($size ? '?size=' . $size : '');
-        }
-
-
-        return $this->cdn . '/embed/avatars/' . $color . '.png';
+        return $this->discordAccount?->getAccessToken();
     }
 
     /**
-     * Get the user's guilds.
+     * Get the user's Discord guilds.
      *
      * @throws RequestException
      * @throws Exception
      */
-    public function getGuilds(bool $withCounts = false): Collection
+    public function getDiscordGuilds(bool $withCounts = false): Collection
     {
-        $accessToken = $this->getAccessToken();
-
-        if (!$accessToken) {
-            throw new Exception('The access token is invalid.');
-        }
-
-        $response = (new DiscordService())->getCurrentUserGuilds($accessToken, $withCounts);
-
-        return collect($response);
+        return $this->requireDiscordAccount()->getGuilds($withCounts);
     }
 
     /**
-     * Get the user's guild member.
+     * Get the user's guild member object for the given guild.
      *
      * @throws RequestException
      * @throws Exception
      */
-    public function getGuildMember(string $guildId): GuildMember|null
+    public function getDiscordGuildMember(string $guildId): GuildMember
     {
-        $accessToken = $this->getAccessToken();
-
-        if (!$accessToken) {
-            throw new Exception('The access token is invalid.');
-        }
-
-        $response = (new DiscordService())->getGuildMember($accessToken, $guildId);
-
-        return new GuildMember($response);
+        return $this->requireDiscordAccount()->getGuildMember($guildId);
     }
 
     /**
-     * Join a guild.
+     * Add the user to the given guild.
      *
      * @throws RequestException
      * @throws Exception
      */
-    public function joinGuild(string $guildId, array $options = []): GuildMember|null
+    public function joinDiscordGuild(string $guildId, array $options = []): GuildMember
     {
-        $accessToken = $this->getAccessToken();
-
-        if (!$accessToken) {
-            throw new Exception('The access token is invalid.');
-        }
-
-        return (new DiscordService())->joinGuild($accessToken, $this, $guildId, $options);
+        return $this->requireDiscordAccount()->joinGuild($guildId, $options);
     }
 
     /**
-     * Get the user's connections.
+     * Get the user's Discord connections.
      *
      * @throws RequestException
      * @throws Exception
      */
-    public function getConnections(): Collection
+    public function getDiscordConnections(): Collection
     {
-        $accessToken = $this->getAccessToken();
+        return $this->requireDiscordAccount()->getConnections();
+    }
 
-        if (!$accessToken) {
-            throw new Exception('The access token is invalid.');
+    /**
+     * Revoke the access token and unlink the user's Discord account.
+     *
+     * @throws RequestException
+     */
+    public function unlinkDiscordAccount(): bool
+    {
+        return (bool) $this->discordAccount?->revoke();
+    }
+
+    /**
+     * Get the user's Discord account or fail.
+     *
+     * @throws Exception
+     */
+    protected function requireDiscordAccount(): DiscordAccount
+    {
+        $account = $this->discordAccount;
+
+        if (!$account) {
+            throw new Exception('The user does not have a Discord account linked.');
         }
 
-        $response = (new DiscordService())->getCurrentUserConnections($accessToken);
-
-        return collect($response);
+        return $account;
     }
 }

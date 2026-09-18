@@ -1,0 +1,7 @@
+## There Is No Account Matching Your Discord Account
+This error occurs when the user resolver returns `null`. With the default resolver, this means `users.create_missing` is disabled in `config/larascord.php` and no existing user was matched.
+
+Resolutions:
+* Set `users.create_missing` to `true` to create a user from the `users.attributes` mapping.
+* Enable `users.link_by_email` and make sure the e-mail address of the Discord account matches the column set in `users.email_column`.
+* Register a resolver with `Larascord::resolveUsersUsing()` that returns the user.
