@@ -26,12 +26,12 @@
         }
     },
     "require-dev": {
-        "orchestra/testbench": "^10"
+        "orchestra/testbench": "^11"
     },
     "require": {
         "php": "^8.2",
-        "laravel/framework": "^12",
-        "guzzlehttp/guzzle": "^7",
+        "laravel/framework": "^13",
+        "guzzlehttp/guzzle": "^8",
         "laravel/breeze": "^2"
     }
 }

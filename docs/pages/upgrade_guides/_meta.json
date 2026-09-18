@@ -1,5 +1,6 @@
 {
-  "upgrade_v4_to_v5": "Upgrading from v4 to v5",
+  "upgrade_v7_to_v8": "Upgrading from v7 to v8",
+  "upgrade_v6_to_v7": "Upgrading from v6 to v7",
   "upgrade_v5_to_v6": "Upgrading from v5 to v6",
-    "upgrade_v6_to_v7": "Upgrading from v6 to v7"
+  "upgrade_v4_to_v5": "Upgrading from v4 to v5"
 }
