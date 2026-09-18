@@ -1,0 +1,92 @@
+import { Callout } from 'nextra-theme-docs'
+
+The `Larascord` facade is the entry point to everything the package does outside of its own routes.
+
+```php
+use Jakyeru\Larascord\Facades\Larascord;
+```
+
+## authorizationUrl
+
+Builds the Discord authorization URL from your configuration. Use it when you want to start the flow yourself instead of linking to the `larascord.redirect` route.
+
+```php copy=false
+/**
+* Get the Discord authorization URL.
+*
+* @return string
+*/
+```
+
+```php showLineNumbers
+$state = Larascord::generateState();
+
+session()->put(Larascord::STATE_KEY, $state);
+
+return redirect()->away(Larascord::authorizationUrl($state));
+```
+
+<Callout type="warning">
+    If `verify_state` is enabled, the state you put in the session has to be the one you pass to the URL, otherwise the callback will reject the login.
+</Callout>
+
+## resolveUsersUsing
+
+Replaces the way Larascord decides which of your users a Discord account belongs to. Register it in the `boot` method of a service provider.
+
+```php copy=false
+/**
+* Register a callback used to resolve the application user.
+*
+* @return static
+*/
+```
+
+```php filename="app/Providers/AppServiceProvider.php" showLineNumbers
+use App\Models\User;
+use Jakyeru\Larascord\Facades\Larascord;
+use Jakyeru\Larascord\Types\User as DiscordUser;
+
+public function boot(): void
+{
+    Larascord::resolveUsersUsing(function (DiscordUser $discordUser) {
+        return User::where('discord_handle', $discordUser->username)->first();
+    });
+}
+```
+
+<Callout type="info">
+    Return `null` to refuse the login. The user will be redirected with the `registration_disabled` error message.
+</Callout>
+
+If you would rather swap the whole resolver, bind your own implementation of `Jakyeru\Larascord\Contracts\ResolvesUsers` in the container.
+
+```php
+$this->app->bind(ResolvesUsers::class, MyUserResolver::class);
+```
+
+## syncAccount
+
+Creates or updates the Discord account belonging to a Discord profile and links it to a user.
+
+```php copy=false
+/**
+* Create or update the Discord account belonging to the given Discord user.
+*
+* @return Jakyeru\Larascord\Models\DiscordAccount
+*/
+```
+
+## scopes and hasScope
+
+```php
+Larascord::scopes(); // "identify email"
+
+Larascord::hasScope('guilds'); // false
+```
+
+## version
+
+```php
+Larascord::version(); // "8.0.0"
+```

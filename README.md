@@ -13,6 +13,8 @@
 # About Larascord
 Larascord is a package that allows users to log in to your Laravel application using their Discord account (through the OAuth2 protocol) without the need to handle or store any of the user's sensitive credentials.
 
+It installs into a brand new application as easily as into one that already has users, its own authentication and its own UI. Larascord keeps the Discord profile in its own tables, links it to your users through a foreign key and never publishes a view, a route file or a migration for a table it does not own. Remove the package and drop its two tables, and your application is exactly as it was.
+
 # Demo
 You can see a demo of Larascord in action on [demo.jakye.me/larascord](https://demo.jakye.me/larascord).
 

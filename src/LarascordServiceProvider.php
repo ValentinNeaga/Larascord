@@ -3,6 +3,8 @@
 namespace Jakyeru\Larascord;
 
 use Illuminate\Support\ServiceProvider;
+use Jakyeru\Larascord\Contracts\ResolvesUsers;
+use Jakyeru\Larascord\Resolvers\UserResolver;
 
 class LarascordServiceProvider extends ServiceProvider
 {
@@ -18,10 +20,10 @@ class LarascordServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        if ($this->app->runningInConsole()) {
-            $this->registerCommands();
-            $this->registerConfiguration();
-        }
+        $this->mergeConfigFrom(__DIR__.'/config/config.php', 'larascord');
+
+        $this->app->singleton(Larascord::class);
+        $this->app->bind(ResolvesUsers::class, UserResolver::class);
     }
 
     /*
@@ -30,7 +32,8 @@ class LarascordServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if ($this->app->runningInConsole()) {
-            $this->registerConfiguration();
+            $this->registerCommands();
+            $this->registerPublishing();
         }
 
         $this->registerRoutes();
@@ -48,17 +51,17 @@ class LarascordServiceProvider extends ServiceProvider
     }
 
     /*
-     * Register the package configuration.
+     * Register the package's publishable resources.
      */
-    protected function registerConfiguration(): void
+    protected function registerPublishing(): void
     {
         $this->publishes([
             __DIR__.'/config/config.php' => config_path('larascord.php'),
-        ], 'config');
+        ], ['larascord-config', 'config']);
 
-        $this->publishes([
-            __DIR__.'/database/migrations/' => database_path('migrations'),
-        ], 'migrations');
+        $this->publishesMigrations([
+            __DIR__.'/database/migrations' => database_path('migrations'),
+        ], ['larascord-migrations', 'migrations']);
     }
 
     /*
@@ -66,6 +69,10 @@ class LarascordServiceProvider extends ServiceProvider
      */
     protected function registerRoutes(): void
     {
+        if (!config('larascord.routes.enabled', true)) {
+            return;
+        }
+
         $this->loadRoutesFrom(__DIR__.'/routes/larascord.php');
     }
 }

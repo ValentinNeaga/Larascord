@@ -12,6 +12,7 @@ class PublishCommand extends Command
      * @var string
      */
     protected $signature = 'larascord:publish
+                            {--migrations : Publish the migrations instead of the configuration file}
                             {--force : Overwrite any existing files.}';
 
     /**
@@ -23,33 +24,40 @@ class PublishCommand extends Command
 
     /**
      * Execute the console command.
-     *
-     * @return void
      */
-    public function handle()
+    public function handle(): int
     {
-        // Checking if the configuration has already been published.
+        if ($this->option('migrations')) {
+            $this->call('vendor:publish', [
+                '--provider' => 'Jakyeru\Larascord\LarascordServiceProvider',
+                '--tag' => 'larascord-migrations',
+                '--force' => $this->option('force'),
+            ]);
+
+            $this->info('Larascord\'s migrations have been published successfully.');
+
+            return self::SUCCESS;
+        }
+
         if (file_exists(config_path('larascord.php')) && !$this->option('force')) {
             $this->error('The configuration file has already been published.');
             $this->error('If you want to overwrite the existing file, use the --force option.');
 
-            return;
+            return self::FAILURE;
         }
 
-        // Checking if the command should be run forcefully.
         if ($this->option('force')) {
             $this->warn('This command is running in force mode. Any existing configuration file will be overwritten.');
         }
 
-        // Publish the configuration file.
-        try {
-            shell_exec('php artisan vendor:publish --provider="Jakyeru\Larascord\LarascordServiceProvider" --tag=config' . ($this->option('force') ? ' --force' : ''));
-        } catch (\Exception $e) {
-            $this->error('Could not publish the configuration file.');
-            $this->error($e->getMessage());
-        }
+        $this->call('vendor:publish', [
+            '--provider' => 'Jakyeru\Larascord\LarascordServiceProvider',
+            '--tag' => 'larascord-config',
+            '--force' => $this->option('force'),
+        ]);
 
-        // Inform the user that the command has finished.
         $this->info('Larascord\'s settings have been published successfully.');
+
+        return self::SUCCESS;
     }
 }

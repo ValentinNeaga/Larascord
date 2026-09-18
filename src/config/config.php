@@ -11,7 +11,7 @@ return [
     |
     */
 
-    'client_id' => env('LARASCORD_CLIENT_ID', null),
+    'client_id' => env('LARASCORD_CLIENT_ID'),
 
     /*
     |--------------------------------------------------------------------------
@@ -22,18 +22,19 @@ return [
     |
     */
 
-    'client_secret' => env('LARASCORD_CLIENT_SECRET', null),
+    'client_secret' => env('LARASCORD_CLIENT_SECRET'),
 
     /*
     |--------------------------------------------------------------------------
     | Application Access Token
     |--------------------------------------------------------------------------
     |
-    | This is the access token of your Discord application.
+    | This is the bot token of your Discord application. It is only required if
+    | you want to add users to a guild through the "guilds.join" scope.
     |
     */
 
-    'access_token' => env('LARASCORD_ACCESS_TOKEN', null),
+    'access_token' => env('LARASCORD_ACCESS_TOKEN'),
 
     /*
     |--------------------------------------------------------------------------
@@ -53,35 +54,23 @@ return [
     |--------------------------------------------------------------------------
     |
     | This is the URI that Discord will redirect to after the user authorizes
-    | your application.
+    | your application. It has to match one of the redirect URLs listed in the
+    | OAuth2 tab of your Discord application.
     |
     */
 
-    'redirect_uri' => env('APP_URL', 'http://localhost:8000') . '/' . env('LARASCORD_PREFIX', 'larascord') . '/callback',
+    'redirect_uri' => env('LARASCORD_REDIRECT_URI', env('APP_URL', 'http://localhost:8000') . '/' . env('LARASCORD_PREFIX', 'larascord') . '/callback'),
 
     /*
     |--------------------------------------------------------------------------
     | Scopes
     |--------------------------------------------------------------------------
     |
-    | These are the OAuth2 scopes of your Discord application.
+    | These are the OAuth2 scopes Larascord will ask Discord for.
     |
     */
 
-    'scopes' => env('LARASCORD_SCOPE', 'identify&email'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Route Prefix
-    |--------------------------------------------------------------------------
-    |
-    | This is the prefix that Larascord will use for its routes. For example,
-    | the prefix "larascord" will result in the route
-    | "https://domain.com/larascord/login".
-    |
-    */
-
-    'route_prefix' => env('LARASCORD_PREFIX', 'larascord'),
+    'scopes' => array_values(array_filter(array_map('trim', explode(',', env('LARASCORD_SCOPES', 'identify,email'))))),
 
     /*
     |--------------------------------------------------------------------------
@@ -97,7 +86,116 @@ return [
     |
     */
 
-    'prompt' => 'none',
+    'prompt' => env('LARASCORD_PROMPT', 'none'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | State Verification
+    |--------------------------------------------------------------------------
+    |
+    | Larascord sends a random "state" parameter to Discord and verifies it when
+    | the user comes back. This protects the callback route against cross-site
+    | request forgery. Only turn this off if you build the authorization URL
+    | yourself and cannot keep the state in the session.
+    |
+    */
+
+    'verify_state' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Routes
+    |--------------------------------------------------------------------------
+    |
+    | Larascord registers its own routes under the prefix below. Every route is
+    | named with a "larascord." prefix so it can never collide with the routes
+    | of your application. Set "enabled" to false if you would rather point
+    | your own routes to Jakyeru\Larascord\Http\Controllers\DiscordController.
+    |
+    | The "login_alias" option registers a "/login" route named "login" that
+    | sends the visitor straight to Discord. Leave it disabled if your
+    | application already has a route with that name.
+    |
+    */
+
+    'routes' => [
+        'enabled' => true,
+        'prefix' => env('LARASCORD_PREFIX', 'larascord'),
+        'middleware' => ['web'],
+        'authenticated_middleware' => ['web', 'auth'],
+        'login_alias' => env('LARASCORD_LOGIN_ALIAS', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication Guard
+    |--------------------------------------------------------------------------
+    |
+    | This is the guard Larascord uses to log the user in and out.
+    |
+    */
+
+    'guard' => env('LARASCORD_GUARD', 'web'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Users
+    |--------------------------------------------------------------------------
+    |
+    | Larascord never touches your users table. It keeps the Discord profile in
+    | its own table and links it to one of your users through a foreign key.
+    |
+    | The "attributes" array maps the columns of your users table to the
+    | attributes of the Discord profile. Available attributes are: id,
+    | username, global_name, display_name, discriminator, avatar,
+    | email, verified, banner, banner_color, accent_color,
+    | locale, mfa_enabled, premium_type, public_flags.
+    |
+    | "link_by_email" links a Discord account to an existing user when their
+    | e-mail addresses match, which is what you want when you are adding
+    | Discord login to an application that already has registered users.
+    |
+    | "create_missing" decides whether Larascord may create a user when there
+    | is nothing to link the Discord account to. Turn it off to keep your
+    | application invite-only.
+    |
+    | "fill_random_password" gives the created user a random hashed password so
+    | that a non-nullable password column does not reject the insert. The
+    | password is never shown to anyone and cannot be guessed.
+    |
+    */
+
+    'users' => [
+        'model' => env('LARASCORD_USER_MODEL', 'App\Models\User'),
+        'email_column' => 'email',
+        'attributes' => [
+            'name' => 'display_name',
+            'email' => 'email',
+        ],
+        'link_by_email' => true,
+        'create_missing' => true,
+        'fill_random_password' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Database
+    |--------------------------------------------------------------------------
+    |
+    | These are the tables Larascord owns. Dropping them is all it takes to
+    | remove every trace of Larascord from your database.
+    |
+    | Set "foreign_keys" to false if your users table lives on another
+    | connection or does not support foreign key constraints.
+    |
+    */
+
+    'database' => [
+        'connection' => env('LARASCORD_DB_CONNECTION'),
+        'accounts_table' => 'larascord_accounts',
+        'access_tokens_table' => 'larascord_access_tokens',
+        'foreign_keys' => true,
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -157,14 +255,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Redirect Login
+    | Redirects
     |--------------------------------------------------------------------------
     |
-    | Where to redirect the user after they log in.
+    | Where to send the user after they log in, after they log out and after
+    | they unlink their Discord account.
     |
     */
 
     'redirect_login' => '/',
+
+    'redirect_logout' => '/',
+
+    'redirect_unlink' => '/',
 
     /*
     |--------------------------------------------------------------------------
@@ -185,6 +288,10 @@ return [
             'message' => 'The authorization code is invalid.',
             'redirect' => '/'
         ],
+        'invalid_state' => [
+            'message' => 'The login attempt has expired. Please try again.',
+            'redirect' => '/'
+        ],
         'authorization_failed' => [
             'message' => 'The authorization failed.',
             'redirect' => '/'
@@ -193,8 +300,12 @@ return [
             'message' => 'Couldn\'t get your e-mail address.',
             'redirect' => '/'
         ],
-        'invalid_user' => [
-            'message' => 'The user ID doesn\'t match the logged-in user.',
+        'account_already_linked' => [
+            'message' => 'This Discord account is already linked to another user.',
+            'redirect' => '/'
+        ],
+        'registration_disabled' => [
+            'message' => 'There is no account matching your Discord account.',
             'redirect' => '/'
         ],
         'database_error' => [
@@ -233,8 +344,8 @@ return [
             'message' => 'An error occurred while trying to revoke your access token.',
             'redirect' => '/'
         ],
-        'user_deleted' => [
-            'message' => 'Your account is deleted and you can\'t log in.',
+        'missing_discord_account' => [
+            'message' => 'You don\'t have a Discord account linked.',
             'redirect' => '/'
         ],
     ],
@@ -250,8 +361,12 @@ return [
     */
 
     'success_messages' => [
-        'user_deleted' => [
-            'message' => 'Your account has been deleted.',
+        'account_linked' => [
+            'message' => 'Your Discord account has been linked.',
+            'redirect' => null
+        ],
+        'account_unlinked' => [
+            'message' => 'Your Discord account has been unlinked.',
             'redirect' => '/'
         ],
     ],

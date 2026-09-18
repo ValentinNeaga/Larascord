@@ -1,7 +1,7 @@
 import { Steps, Callout } from 'nextra-theme-docs'
 
-<Callout type="warning">
-    You must install Larascord in a fresh Laravel application otherwise unexpected behavior may occur.
+<Callout type="info">
+    Larascord can be installed in a brand new application as well as in one that already has users, its own authentication and its own UI. It never publishes views, never touches your `users` table and never replaces any of your routes.
 </Callout>
 
 <Steps>
@@ -14,10 +14,155 @@ import { Steps, Callout } from 'nextra-theme-docs'
     ```bash
     php artisan larascord:install
     ```
+    The command asks for your Discord application's credentials, writes them to your `.env` file, publishes the configuration file and the migrations and offers to run them.
 
-    ### Follow the instructions from the command
+    ### Add a link to the login route
+    Larascord does not ship any views, so you decide where the button lives.
+    ```blade filename="resources/views/welcome.blade.php"
+    <a href="{{ route('larascord.redirect') }}">Log in with Discord</a>
+    ```
 </Steps>
 
 <Callout type="info">
     You can get your Discord application's `CLIENT ID` and `CLIENT SECRET` from the `OAuth2` tab of your application.
 </Callout>
+
+## What Larascord adds to your application
+
+| What | Where |
+| --- | --- |
+| Configuration | `config/larascord.php` |
+| Two migrations | `database/migrations` |
+| Two tables | `larascord_accounts` and `larascord_access_tokens` |
+| Routes | Everything under the `larascord` prefix, named `larascord.*` |
+
+That is the whole footprint. Removing the package and dropping the two tables leaves your application exactly as it was.
+
+## How your users are linked
+
+Larascord stores the Discord profile in its own `larascord_accounts` table and links it to one of your users through a `user_id` foreign key. Your `users` table keeps the columns it already has.
+
+When somebody comes back from Discord, Larascord looks for a match in this order:
+
+<Steps>
+    ### An account that is already linked
+    If the Discord account has been seen before, the linked user is logged in.
+
+    ### An existing user with the same e-mail address
+    This is what makes Larascord work in an application that already has registered users. Turn it off with the `users.link_by_email` option.
+
+    ### A new user
+    Larascord creates one using the `users.attributes` mapping. Turn it off with the `users.create_missing` option to keep your application invite-only.
+</Steps>
+
+## Mapping the Discord profile to your users table
+
+The `users.attributes` option maps the columns of your table to the attributes of the Discord profile.
+
+```php filename="config/larascord.php" showLineNumbers
+'users' => [
+    'model' => App\Models\User::class,
+    'email_column' => 'email',
+    'attributes' => [
+        'name' => 'display_name',
+        'email' => 'email',
+    ],
+    'link_by_email' => true,
+    'create_missing' => true,
+    'fill_random_password' => true,
+],
+```
+
+The available attributes are `id`, `username`, `global_name`, `display_name`, `discriminator`, `avatar`, `email`, `verified`, `banner`, `banner_color`, `accent_color`, `locale`, `mfa_enabled`, `premium_type` and `public_flags`.
+
+<Callout type="info">
+    `display_name` is the user's Discord display name and falls back to their username, so it is never empty.
+</Callout>
+
+If your `users` table needs more than a mapping, register your own resolver in a service provider and Larascord will use it instead:
+
+```php filename="app/Providers/AppServiceProvider.php" showLineNumbers
+use Jakyeru\Larascord\Facades\Larascord;
+use Jakyeru\Larascord\Types\User as DiscordUser;
+
+public function boot(): void
+{
+    Larascord::resolveUsersUsing(function (DiscordUser $discordUser) {
+        return User::firstOrCreate(['email' => $discordUser->email], [
+            'name' => $discordUser->display_name,
+            'team_id' => Team::default()->id,
+        ]);
+    });
+}
+```
+
+Return `null` from the callback to reject the login.
+
+## Adding Discord to an account that already exists
+
+An authenticated user can link their Discord account by visiting the `larascord.link` route. Larascord attaches the Discord account to the user who is logged in instead of creating a new one.
+
+```blade
+@if (auth()->user()->hasDiscordAccount())
+    <form method="POST" action="{{ route('larascord.unlink') }}">
+        @csrf
+        @method('DELETE')
+        <button>Unlink Discord</button>
+    </form>
+@else
+    <a href="{{ route('larascord.link') }}">Link Discord</a>
+@endif
+```
+
+<Callout type="info">
+    `hasDiscordAccount()` comes from the optional `InteractsWithDiscord` trait. Without the trait you can reach the same record with `Jakyeru\Larascord\Models\DiscordAccount::forUser($user)`.
+</Callout>
+
+## Optional: the InteractsWithDiscord trait
+
+The trait is convenience, not a requirement. Add it to your `User` model if you want to talk to Discord through your user.
+
+```php filename="app/Models/User.php" showLineNumbers {5, 9}
+namespace App\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Jakyeru\Larascord\Traits\InteractsWithDiscord;
+
+class User extends Authenticatable
+{
+    use InteractsWithDiscord;
+}
+```
+
+## Optional: the login route alias
+
+Laravel's `auth` middleware redirects guests to a route named `login`. If your application does not have one, let Larascord register it:
+
+```dotenv filename=".env"
+LARASCORD_LOGIN_ALIAS=true
+```
+
+<Callout type="warning">
+    Leave this disabled if your application already registers a route named `login`, otherwise the last one registered wins.
+</Callout>
+
+## Uninstalling
+
+<Steps>
+    ### Roll back the migrations
+    ```bash
+    php artisan migrate:rollback --path=database/migrations/2026_01_01_000001_create_larascord_access_tokens_table.php
+    ```
+    ```bash
+    php artisan migrate:rollback --path=database/migrations/2026_01_01_000000_create_larascord_accounts_table.php
+    ```
+
+    ### Remove the package
+    ```bash
+    composer remove jakyeru/larascord
+    ```
+
+    ### Delete `config/larascord.php`, the two migration files and the `InteractsWithDiscord` trait if you added it
+</Steps>
+
+Your users, your views and your routes are untouched.

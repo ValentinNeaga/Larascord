@@ -5,7 +5,7 @@ namespace Jakyeru\Larascord\Http\Requests;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreUserRequest extends FormRequest
+class CallbackRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -24,6 +24,7 @@ class StoreUserRequest extends FormRequest
     {
         return [
             'code' => ['required', 'string'],
+            'state' => ['nullable', 'string'],
         ];
     }
 }

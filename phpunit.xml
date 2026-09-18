@@ -14,11 +14,12 @@
     <env name="APP_ENV" value="testing"/>
     <env name="APP_KEY" value="base64:mAzAWhNdvQdowN39ybLHSV1jWxhQMjl5VvziycYCtSQ="/>
     <env name="DB_CONNECTION" value="testing"/>
+    <env name="APP_DEBUG" value="false"/>
     <env name="LARASCORD_CLIENT_ID" value="0000000000000000"/>
     <env name="LARASCORD_CLIENT_SECRET" value="ZFe6qUaYL4PSJ5vH4Tm8gtJaX9xmeqJp"/>
     <env name="LARASCORD_GRANT_TYPE" value="authorization_code"/>
     <env name="LARASCORD_PREFIX" value="larascord"/>
-    <env name="LARASCORD_SCOPE" value="identify&amp;email"/>
+    <env name="LARASCORD_SCOPES" value="identify,email"/>
   </php>
   <source>
     <include>

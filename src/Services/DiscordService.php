@@ -2,11 +2,10 @@
 
 namespace Jakyeru\Larascord\Services;
 
-use App\Models\User;
 use Exception;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
+use Jakyeru\Larascord\Facades\Larascord;
 use Jakyeru\Larascord\Types\AccessToken;
 use Jakyeru\Larascord\Types\GuildMember;
 
@@ -34,7 +33,7 @@ class DiscordService
     ];
 
     /**
-     * UserService constructor.
+     * DiscordService constructor.
      */
     public function __construct()
     {
@@ -42,7 +41,7 @@ class DiscordService
         $this->tokenData['client_secret'] = config('larascord.client_secret');
         $this->tokenData['grant_type'] = config('larascord.grant_type');
         $this->tokenData['redirect_uri'] = config('larascord.redirect_uri');
-        $this->tokenData['scope'] = config('larascord.scopes');
+        $this->tokenData['scope'] = Larascord::scopes();
     }
 
     /**
@@ -161,12 +160,12 @@ class DiscordService
      * @throws RequestException
      * @throws Exception
      */
-    public function joinGuild(AccessToken $accessToken, User $user, string $guildId, array $options = []): GuildMember
+    public function joinGuild(AccessToken $accessToken, string $discordId, string $guildId, array $options = []): GuildMember
     {
         if (!config('larascord.access_token')) throw new Exception(config('larascord.error_messages.missing_access_token.message'));
         if (!$accessToken->hasScope('guilds.join')) throw new Exception('The "guilds" and "guilds.join" scopes are required.');
 
-        $response = Http::withToken(config('larascord.access_token'), 'Bot')->put($this->baseApi . '/guilds/' . $guildId . '/members/' . $user->id, array_merge([
+        $response = Http::withToken(config('larascord.access_token'), 'Bot')->put($this->baseApi . '/guilds/' . $guildId . '/members/' . $discordId, array_merge([
             'access_token' => $accessToken->access_token,
         ], $options));
 
@@ -178,44 +177,14 @@ class DiscordService
     }
 
     /**
-     * Create or update a user in the database.
-     *
-     * @throws Exception
-     */
-    public function createOrUpdateUser(\Jakyeru\Larascord\Types\User $user): User
-    {
-        if (!$user->getAccessToken()) {
-            throw new Exception('User access token is missing.');
-        }
-
-        if (Schema::hasColumn('users', 'deleted_at')) {
-            return User::withTrashed()->updateOrCreate(
-                [
-                    'id' => $user->id,
-                ],
-                $user->toArray(),
-            );
-        }
-
-        return User::updateOrCreate(
-            [
-                'id' => $user->id,
-            ],
-            $user->toArray(),
-        );
-    }
-
-    /**
      * Verify if the user is in the specified guild(s).
      */
     public function isUserInGuilds(array $guilds): bool
     {
-        // Verify if the user is in all the specified guilds if strict mode is enabled.
         if (config('larascord.guilds_strict')) {
             return empty(array_diff(config('larascord.guilds'), array_column($guilds, 'id')));
         }
 
-        // Verify if the user is in any of the specified guilds if strict mode is disabled.
         return !empty(array_intersect(config('larascord.guilds'), array_column($guilds, 'id')));
     }
 
@@ -224,7 +193,6 @@ class DiscordService
      */
     public function hasRoleInGuild(GuildMember $guildMember, array $roles): bool
     {
-        // Verify if the user has any of the specified roles.
         return !empty(array_intersect($roles, $guildMember->roles));
     }
 
@@ -233,7 +201,7 @@ class DiscordService
      *
      * @throws RequestException
      */
-    public function revokeAccessToken(string $accessToken): object
+    public function revokeAccessToken(string $accessToken): mixed
     {
         $response = Http::asForm()->post($this->tokenURL . '/revoke', [
             'token' => $accessToken,

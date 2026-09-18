@@ -10,6 +10,15 @@ It allows users to log in to your platform using their Discord account without t
 
 It also seamlessly integrates with Discord, providing a secure and user-friendly way to authenticate users in your application.
 
+## Does it work with my existing project?
+
+Yes. Larascord keeps to itself:
+
+* It stores the Discord profile in its own tables and links it to your users through a foreign key, so your `users` table stays yours.
+* It does not publish views and does not install a starter kit, so your UI is untouched.
+* Every route it registers lives under its own prefix and is named `larascord.*`, so nothing of yours is overwritten.
+* Removing the package and dropping its two tables leaves your application working.
+
 ## Documentation
 
 The documentation is available at [Getting Started](/getting_started).

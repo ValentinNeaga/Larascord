@@ -1,0 +1,9 @@
+## There Is No Account Matching Your Discord Account
+This error occurs when `users.create_missing` is disabled in `config/larascord.php` and Larascord could not find one of your users to link the Discord account to.
+
+That is the expected behaviour for an invite-only application: somebody who has not been given an account cannot create one by logging in with Discord.
+
+If you did not mean to keep the application invite-only, either:
+* Set `users.create_missing` back to `true`, or
+* Make sure `users.link_by_email` is enabled and the user's Discord e-mail address matches the one in your `users` table, or
+* Register your own resolver with `Larascord::resolveUsersUsing()` and return the user yourself.

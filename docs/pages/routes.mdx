@@ -1,6 +1,48 @@
+import { Callout } from 'nextra-theme-docs'
+
+Every route Larascord registers lives under the configured prefix and is named with a `larascord.` prefix, so it can never collide with a route of your application.
+
 | Route Name | URI | Description | Action | Method |
 | ---------- | ---- | ----------- | ------ | ------ |
-| `login` | `/login` | Redirects the user to Discord's OAuth2 authorization page. | REDIRECT | `GET` |
-| `logout` | `/logout` | Invalidates the current session. | `AuthenticatedSessionController@destroy` | `POST` |
-| `larascord.login` | `/larascord/callback` | Callback route for Discord OAuth2 authentication. | `DiscordController@handle` | `GET` |
-| `larascord.refresh_token` | `/larascord/refresh-token` | Redirects to the login page. (Used to access secure parts of the application through the middleware `password.confirm`.) | REDIRECT | `GET` |
+| `larascord.redirect` | `/larascord/redirect` | Sends the visitor to Discord's OAuth2 authorization page. | `DiscordController@redirect` | `GET` |
+| `larascord.callback` | `/larascord/callback` | Callback route for Discord OAuth2 authentication. | `DiscordController@callback` | `GET` |
+| `larascord.logout` | `/larascord/logout` | Invalidates the current session. | `DiscordController@logout` | `POST` |
+| `larascord.link` | `/larascord/link` | Links a Discord account to the authenticated user. | `DiscordController@link` | `GET` |
+| `larascord.unlink` | `/larascord/unlink` | Revokes the access token and unlinks the Discord account. | `DiscordController@unlink` | `DELETE` |
+
+<Callout type="info">
+    The `larascord.link` and `larascord.unlink` routes use the `web` and `auth` middleware. You can change that with the `routes.authenticated_middleware` option.
+</Callout>
+
+## Sending the user back where they came from
+
+Pass a `redirect_to` query parameter to `larascord.redirect` or `larascord.link` and Larascord will send the user there once they are back.
+
+```blade
+<a href="{{ route('larascord.redirect', ['redirect_to' => url()->current()]) }}">Log in with Discord</a>
+```
+
+## The login route alias
+
+Laravel's `auth` middleware redirects guests to a route named `login`. Larascord does not register one unless you ask for it, because your application may already have it.
+
+```dotenv filename=".env"
+LARASCORD_LOGIN_ALIAS=true
+```
+
+This registers `GET /login`, named `login`, which sends the visitor straight to Discord.
+
+## Registering the routes yourself
+
+Set `routes.enabled` to `false` and point your own routes at the controller.
+
+```php filename="routes/web.php" showLineNumbers
+use Jakyeru\Larascord\Http\Controllers\DiscordController;
+
+Route::get('/auth/discord', [DiscordController::class, 'redirect'])->name('larascord.redirect');
+Route::get('/auth/discord/callback', [DiscordController::class, 'callback'])->name('larascord.callback');
+```
+
+<Callout type="warning">
+    Keep the `larascord.redirect` and `larascord.callback` names, and make sure `redirect_uri` in `config/larascord.php` matches the URI of your callback route and the redirect url registered with Discord.
+</Callout>

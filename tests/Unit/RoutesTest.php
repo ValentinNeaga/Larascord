@@ -2,64 +2,72 @@
 
 namespace Jakyeru\Larascord\Tests\Unit;
 
-use Jakyeru\Larascord\LarascordServiceProvider;
-use Orchestra\Testbench\TestCase;
+use Illuminate\Support\Facades\Route;
+use Jakyeru\Larascord\Tests\TestCase;
+use Orchestra\Testbench\Attributes\WithConfig;
 
 class RoutesTest extends TestCase
 {
-    public function setUp():void
+    public function test_redirect_route_sends_the_user_to_discord()
     {
-        parent::setUp();
+        $response = $this->get('/larascord/redirect');
+
+        $response->assertStatus(302);
+
+        $response->assertRedirect('https://discord.com/oauth2/authorize?client_id=0000000000000000&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Flarascord%2Fcallback&response_type=code&scope=identify%20email&prompt=none');
     }
 
-    protected function getPackageProviders($app)
+    public function test_callback_route_requires_a_code()
     {
-        return [
-            LarascordServiceProvider::class
-        ];
-    }
+        $response = $this->get('/larascord/callback');
 
-    protected function getEnvironmentSetUp($app)
-    {
-        $app['config']->set('larascord.client_id', env('LARASCORD_CLIENT_ID'));
-        $app['config']->set('larascord.client_secret', env('LARASCORD_CLIENT_SECRET'));
-        $app['config']->set('larascord.redirect_uri', env('APP_URL', 'http://localhost:8000') . '/' . env('LARASCORD_PREFIX', 'larascord') . '/callback',);
-        $app['config']->set('larascord.scopes', env('LARASCORD_SCOPE'));
-        $app['config']->set('larascord.route_prefix', 'larascord');
-        $app['config']->set('larascord.guilds', []);
-        $app['config']->set('larascord.guild_roles', []);
-    }
+        $response->assertStatus(302);
 
-    public function test_login_route_redirect()
-    {
-        $request = $this->get('/login');
-
-        $request->assertStatus(302);
-
-        $request->assertHeader('Location', 'https://discord.com/oauth2/authorize?client_id=0000000000000000&redirect_uri=http://localhost:8000/larascord/callback&response_type=code&scope=identify%20email&prompt=none');
-
-
-        $request = $this->get(config('larascord.route_prefix') . '/refresh-token');
-
-        $request->assertStatus(302);
-
-        $request->assertHeader('Location', config('app.url') . '/login');
-    }
-
-    public function test_callback_route()
-    {
-        $request = $this->get(config('larascord.route_prefix') . '/callback');
-
-        $request->assertStatus(302);
-
-        $request->assertSessionHasErrors([
-            'code' => 'The code field is required.'
+        $response->assertSessionHasErrors([
+            'code' => 'The code field is required.',
         ]);
+    }
 
-        $request = $this->get(config('larascord.route_prefix') . '/callback?code=0000000000000000');
+    #[WithConfig('larascord.routes.login_alias', true, defer: false)]
+    public function test_authenticated_routes_are_protected()
+    {
+        $this->get('/larascord/link')->assertRedirect('/login');
 
-        $request->assertStatus(302);
+        $this->delete('/larascord/unlink')->assertRedirect('/login');
+    }
 
-        $request->assertSessionHas('error', 'An error occurred while trying to log you in.');
+    public function test_the_login_alias_is_not_registered_by_default()
+    {
+        $this->assertFalse(Route::has('login'));
+    }
+
+    #[WithConfig('larascord.routes.login_alias', true, defer: false)]
+    public function test_the_login_alias_can_be_enabled()
+    {
+        $this->assertTrue(Route::has('login'));
+
+        $this->get('/login')->assertRedirectContains('discord.com/oauth2/authorize');
+    }
+
+    public function test_larascord_does_not_register_routes_outside_of_its_own_namespace()
+    {
+        $names = collect(Route::getRoutes()->getRoutesByName())
+            ->keys()
+            ->reject(fn (string $name) => str_starts_with($name, 'larascord.'))
+            ->values();
+
+        $this->assertEmpty($names->all());
+    }
+
+    #[WithConfig('larascord.routes.enabled', false, defer: false)]
+    public function test_routes_can_be_disabled()
+    {
+        $this->assertFalse(Route::has('larascord.callback'));
+    }
+
+    #[WithConfig('larascord.routes.prefix', 'auth/discord', defer: false)]
+    public function test_the_prefix_is_configurable()
+    {
+        $this->assertSame('auth/discord/callback', Route::getRoutes()->getByName('larascord.callback')->uri());
     }
 }

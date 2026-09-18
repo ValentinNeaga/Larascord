@@ -1,78 +1,82 @@
 import { Steps, Callout } from 'nextra-theme-docs'
 
-<Callout type="warning">
-    Events were deprecated after version [4.1.3](https://github.com/JakyeRU/Larascord/releases/tag/v4.1.3) in favour of [Model Observers](https://laravel.com/docs/master/eloquent#observers).
-</Callout>
+Larascord dispatches its own events. There is nothing to publish and nothing to register, they are dispatched from the package and you listen to them like any other Laravel event.
+
+| Event | Dispatched when | Properties |
+| --- | --- | --- |
+| `DiscordAccountCreated` | A Discord account is stored for the first time. | `$account` |
+| `DiscordAccountUpdated` | A known Discord account comes back and its profile is refreshed. | `$account` |
+| `DiscordAccountLinked` | A Discord account is attached to one of your users. | `$account`, `$user` |
+| `DiscordAccountUnlinked` | A Discord account is removed. | `$account` |
+| `UserAuthenticated` | A user is logged in through Discord. | `$account`, `$user` |
 
 <Callout type="info">
-    Events are created in `App\Events` during installation.
+    Every event lives in the `Jakyeru\Larascord\Events` namespace and `$account` is always a `Jakyeru\Larascord\Models\DiscordAccount`.
 </Callout>
 
 ## Listening
 <Steps>
-    ### Create an event listener
-    To listen to an event you will have to create a listener. You can do this by running the following command:
+    ### Create a listener
     ```bash
-    php artisan make:listener ListenerName --event=EventName
-    ```
-    Example:
-    ```bash
-    php artisan make:listener UserCreated --event=UserWasCreated
+    php artisan make:listener WelcomeNewUser
     ```
 
-    ### Register the listener
-    You will have to register the listener mappings in `App\Providers\EventListenerProvider` in the `$listen` property.
+    ### Type hint the event
+    Laravel discovers the listener from the type hint, so there is nothing else to register.
 
-    ```php filename="EventListenerProvider.php" showLineNumbers {11-13}
-    /**
-    * The event to listener mappings for the application.
-    *
-    * @var array<class-string, array<int, class-string>>
-    */
-    protected $listen = [
-        Registered::class => [
-            SendEmailVerificationNotification::class,
-        ],
+    ```php filename="app/Listeners/WelcomeNewUser.php" showLineNumbers
+    <?php
 
-        UserWasCreated::class => [
-            UserCreated::class
-        ]
-    ];
+    namespace App\Listeners;
+
+    use Illuminate\Support\Facades\Log;
+    use Jakyeru\Larascord\Events\DiscordAccountCreated;
+
+    class WelcomeNewUser
+    {
+        public function handle(DiscordAccountCreated $event): void
+        {
+            Log::info('Welcome ' . $event->account->tag);
+        }
+    }
     ```
 </Steps>
 
-Now the `handle` method of `UserCreated` listener will be executed every time a new user is created.
-```php filename="UserCreated.php" showLineNumbers
+## Example: adding the user to a guild after they log in
+
+```php filename="app/Listeners/AddUserToGuild.php" showLineNumbers
 <?php
 
 namespace App\Listeners;
 
-use App\Events\UserWasCreated;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Facades\Log;
+use Jakyeru\Larascord\Events\UserAuthenticated;
 
-class UserCreated
+class AddUserToGuild
 {
-    /**
-     * Create the event listener.
-     *
-     * @return void
-     */
-    public function __construct()
+    public function handle(UserAuthenticated $event): void
     {
-        //
+        $event->account->joinGuild('81384788765712384');
     }
+}
+```
 
-    /**
-     * Handle the event.
-     *
-     * @param  \App\Events\UserWasCreated  $event
-     * @return void
-     */
-    public function handle(UserWasCreated $event)
+## Example: refusing a banned user
+
+```php filename="app/Listeners/BlockBannedUsers.php" showLineNumbers
+<?php
+
+namespace App\Listeners;
+
+use Illuminate\Support\Facades\Auth;
+use Jakyeru\Larascord\Events\UserAuthenticated;
+
+class BlockBannedUsers
+{
+    public function handle(UserAuthenticated $event): void
     {
-        Log::info('User was created: ' . $event->user->username);
+        if ($event->user->is_banned) {
+            Auth::logout();
+        }
     }
 }
 ```
