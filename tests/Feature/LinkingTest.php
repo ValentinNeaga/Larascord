@@ -57,6 +57,7 @@ class LinkingTest extends TestCase
         $response = $this->actingAs($user)->get('/larascord/callback?code=valid-code');
 
         $response->assertSessionHas('success', 'Your Discord account has been linked.');
+        $response->assertRedirect('/');
 
         $this->assertSame(1, User::count());
         $this->assertTrue($user->fresh()->hasDiscordAccount());
@@ -70,8 +71,10 @@ class LinkingTest extends TestCase
 
         $this->fakeDiscord();
 
+        $this->actingAs($first)->get('/larascord/link');
         $this->actingAs($first)->get('/larascord/callback?code=valid-code');
 
+        $this->actingAs($second)->get('/larascord/link');
         $response = $this->actingAs($second)->get('/larascord/callback?code=valid-code');
 
         $response->assertSessionHas('error', 'This Discord account is already linked to another user.');
@@ -85,6 +88,7 @@ class LinkingTest extends TestCase
 
         $this->fakeDiscord();
 
+        $this->actingAs($user)->get('/larascord/link');
         $this->actingAs($user)->get('/larascord/callback?code=valid-code');
 
         $this->assertSame(1, DiscordAccount::count());
@@ -105,6 +109,7 @@ class LinkingTest extends TestCase
 
         $this->fakeDiscord();
 
+        $this->actingAs($user)->get('/larascord/link');
         $this->actingAs($user)->get('/larascord/callback?code=valid-code');
 
         $user->delete();

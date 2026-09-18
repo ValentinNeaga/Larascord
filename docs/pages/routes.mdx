@@ -1,4 +1,4 @@
-import { Callout } from 'nextra-theme-docs'
+import { Steps, Callout } from 'nextra-theme-docs'
 
 Every route Larascord registers lives under the configured prefix and is named with a `larascord.` prefix, so it can never collide with a route of your application.
 
@@ -14,13 +14,38 @@ Every route Larascord registers lives under the configured prefix and is named w
     The `larascord.link` and `larascord.unlink` routes use the `web` and `auth` middleware. You can change that with the `routes.authenticated_middleware` option.
 </Callout>
 
-## Sending the user back where they came from
+## Where the user lands afterwards
 
-Pass a `redirect_to` query parameter to `larascord.redirect` or `larascord.link` and Larascord will send the user there once they are back.
+Larascord works out the return URL when the flow starts, not when the user comes back, because by then the only thing the session remembers is the route that sent them to Discord.
 
-```blade
-<a href="{{ route('larascord.redirect', ['redirect_to' => url()->current()]) }}">Log in with Discord</a>
-```
+The first of these that applies wins:
+
+<Steps>
+    ### The `redirect_to` query parameter
+    ```blade
+    <a href="{{ route('larascord.redirect', ['redirect_to' => url()->current()]) }}">Log in with Discord</a>
+    ```
+
+    ### The page the user was on, for `larascord.link` only
+    Linking is something a user does from a settings page, so they are sent back to it without you having to pass anything.
+
+    ### The URL Laravel's `auth` middleware stored
+    This is what sends somebody who was heading for a protected page back to it once they have logged in.
+
+    ### `redirect_login` from `config/larascord.php`
+</Steps>
+
+<Callout type="warning">
+    A return URL pointing at another host, or at one of Larascord's own routes, is ignored. The first would let somebody use your login route to bounce visitors to a site of their choosing, and the second would send the user straight back to Discord in a loop.
+</Callout>
+
+## Logging in while already logged in
+
+Visiting `larascord.redirect` or `/login` while logged in is a login, not a linking attempt. The Discord profile is refreshed, the session is kept if it belongs to the same user, and the user lands on the return URL above.
+
+<Callout type="info">
+    If the Discord account belongs to a different user than the one in the session, that user is logged in instead. Use `larascord.link` when you want to attach a Discord account to the account that is already signed in.
+</Callout>
 
 ## The login route alias
 

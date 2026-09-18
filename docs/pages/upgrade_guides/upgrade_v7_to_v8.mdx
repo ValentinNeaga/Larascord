@@ -270,6 +270,9 @@ Version 7 copied event classes into `app/Events` during installation. Version 8 
 
 You can delete the classes version 7 left in `app/Events` and their listeners.
 
+### Logging in while already logged in
+Version 7 logged the user out and showed the `invalid_user` message when the Discord account did not match the session. Version 8 treats `larascord.redirect` and the `/login` alias as a login whether or not somebody is signed in: the Discord profile is refreshed, the session is kept when it belongs to the same user, and the account that owns the Discord profile is logged in when it does not. Use `larascord.link` to attach a Discord account to the user who is already signed in.
+
 ### Soft deleted users
 Version 7 refused to log in a soft deleted user and had a `user_deleted` message for it. Your `users` table is yours now, so do this yourself in a listener on `UserAuthenticated`, or in your authentication guard.
 

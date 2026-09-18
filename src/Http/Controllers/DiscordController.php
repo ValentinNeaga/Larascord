@@ -24,6 +24,22 @@ class DiscordController extends Controller
      */
     public function redirect(Request $request): RedirectResponse
     {
+        return $this->start($request, Larascord::INTENT_LOGIN);
+    }
+
+    /**
+     * Redirect an authenticated user to Discord in order to link their account.
+     */
+    public function link(Request $request): RedirectResponse
+    {
+        return $this->start($request, Larascord::INTENT_LINK);
+    }
+
+    /**
+     * Start the Discord OAuth2 flow.
+     */
+    protected function start(Request $request, string $intent): RedirectResponse
+    {
         $state = null;
 
         if (config('larascord.verify_state', true)) {
@@ -32,19 +48,21 @@ class DiscordController extends Controller
             $request->session()->put(Larascord::STATE_KEY, $state);
         }
 
-        if ($request->filled('redirect_to')) {
-            $request->session()->put(Larascord::INTENDED_KEY, $request->string('redirect_to')->toString());
+        $request->session()->put(Larascord::INTENT_KEY, $intent);
+
+        $request->session()->forget(Larascord::INTENDED_KEY);
+
+        $intended = $this->returnUrl($request, $request->string('redirect_to')->toString());
+
+        if (!$intended && $intent === Larascord::INTENT_LINK) {
+            $intended = $this->returnUrl($request, url()->previous());
+        }
+
+        if ($intended) {
+            $request->session()->put(Larascord::INTENDED_KEY, $intended);
         }
 
         return redirect()->away(Larascord::authorizationUrl($state));
-    }
-
-    /**
-     * Redirect an authenticated user to Discord in order to link their account.
-     */
-    public function link(Request $request): RedirectResponse
-    {
-        return $this->redirect($request);
     }
 
     /**
@@ -87,7 +105,7 @@ class DiscordController extends Controller
 
         $account = DiscordAccount::forDiscordId($discordUser->id);
         $guard = Auth::guard(config('larascord.guard', 'web'));
-        $linking = $guard->check();
+        $linking = $request->session()->pull(Larascord::INTENT_KEY) === Larascord::INTENT_LINK && $guard->check();
 
         if ($linking) {
             $user = $guard->user();
@@ -95,8 +113,6 @@ class DiscordController extends Controller
             if ($account && $account->user_id && $account->user_id != $user->getAuthIdentifier()) {
                 return $this->throwError('account_already_linked');
             }
-
-            $request->session()->put('auth.password_confirmed_at', time());
         } else {
             $user = $account?->user;
 
@@ -111,6 +127,12 @@ class DiscordController extends Controller
             if (!$user) {
                 return $this->throwError('registration_disabled');
             }
+        }
+
+        $authenticated = $guard->check() && $guard->id() == $user->getAuthIdentifier();
+
+        if ($authenticated) {
+            $request->session()->put('auth.password_confirmed_at', time());
         }
 
         DB::beginTransaction();
@@ -128,18 +150,18 @@ class DiscordController extends Controller
         DB::commit();
 
         if ($linking) {
-            return $this->redirectWithSuccess('account_linked', $request->session()->pull(Larascord::INTENDED_KEY));
+            return $this->redirectWithSuccess('account_linked', $this->intendedUrl($request));
         }
 
-        $guard->login($user, config('larascord.remember_me', false));
+        if (!$authenticated) {
+            $guard->login($user, config('larascord.remember_me', false));
 
-        $request->session()->regenerate();
+            $request->session()->regenerate();
+        }
 
         UserAuthenticated::dispatch($account, $user);
 
-        return redirect()->intended(
-            $request->session()->pull(Larascord::INTENDED_KEY) ?: config('larascord.redirect_login', '/')
-        );
+        return redirect($this->intendedUrl($request));
     }
 
     /**
@@ -175,7 +197,7 @@ class DiscordController extends Controller
 
         DiscordAccountUnlinked::dispatch($account);
 
-        return $this->redirectWithSuccess('account_unlinked');
+        return $this->redirectWithSuccess('account_unlinked', config('larascord.redirect_unlink', '/'));
     }
 
     /**
@@ -263,11 +285,54 @@ class DiscordController extends Controller
     /**
      * Redirect the user with a success message.
      */
-    protected function redirectWithSuccess(string $key, ?string $fallback = null): RedirectResponse
+    protected function redirectWithSuccess(string $key, string $fallback): RedirectResponse
     {
         $message = config('larascord.success_messages.' . $key . '.message');
         $redirect = config('larascord.success_messages.' . $key . '.redirect') ?: $fallback;
 
-        return ($redirect ? redirect($redirect) : back())->with('success', $message);
+        return redirect($redirect)->with('success', $message);
+    }
+
+    /**
+     * Get the URL the user should be sent to once they are back from Discord.
+     */
+    protected function intendedUrl(Request $request): string
+    {
+        return $this->returnUrl($request, $request->session()->pull(Larascord::INTENDED_KEY))
+            ?? $this->returnUrl($request, $request->session()->pull('url.intended'))
+            ?? config('larascord.redirect_login', '/');
+    }
+
+    /**
+     * Make sure the given URL is safe to send the user back to.
+     */
+    protected function returnUrl(Request $request, ?string $url): ?string
+    {
+        if (!$url) {
+            return null;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if ($host && $host !== $request->getHost()) {
+            return null;
+        }
+
+        return $this->startsTheFlow($url) ? null : $url;
+    }
+
+    /**
+     * Determine whether the given URL sends the user straight back to Discord.
+     */
+    protected function startsTheFlow(string $url): bool
+    {
+        $path = trim(parse_url($url, PHP_URL_PATH) ?: '', '/');
+        $prefix = trim(config('larascord.routes.prefix', 'larascord'), '/');
+
+        if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
+            return true;
+        }
+
+        return (bool) config('larascord.routes.login_alias', false) && $path === 'login';
     }
 }

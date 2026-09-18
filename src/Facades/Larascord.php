@@ -30,6 +30,21 @@ class Larascord extends Facade
     public const INTENDED_KEY = \Jakyeru\Larascord\Larascord::INTENDED_KEY;
 
     /**
+     * The session key holding the reason the flow was started.
+     */
+    public const INTENT_KEY = \Jakyeru\Larascord\Larascord::INTENT_KEY;
+
+    /**
+     * The flow was started to log the visitor in.
+     */
+    public const INTENT_LOGIN = \Jakyeru\Larascord\Larascord::INTENT_LOGIN;
+
+    /**
+     * The flow was started to link an account to the authenticated user.
+     */
+    public const INTENT_LINK = \Jakyeru\Larascord\Larascord::INTENT_LINK;
+
+    /**
      * Get the registered name of the component.
      */
     protected static function getFacadeAccessor(): string

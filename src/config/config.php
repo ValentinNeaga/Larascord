@@ -367,7 +367,7 @@ return [
         ],
         'account_unlinked' => [
             'message' => 'Your Discord account has been unlinked.',
-            'redirect' => '/'
+            'redirect' => null
         ],
     ],
 

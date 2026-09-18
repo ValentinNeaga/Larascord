@@ -26,6 +26,21 @@ class Larascord
     public const INTENDED_KEY = 'larascord.intended';
 
     /**
+     * The session key holding the reason the flow was started.
+     */
+    public const INTENT_KEY = 'larascord.intent';
+
+    /**
+     * The flow was started to log the visitor in.
+     */
+    public const INTENT_LOGIN = 'login';
+
+    /**
+     * The flow was started to link an account to the authenticated user.
+     */
+    public const INTENT_LINK = 'link';
+
+    /**
      * The callback used to resolve the application user.
      */
     protected ?Closure $userResolver = null;
